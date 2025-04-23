@@ -336,6 +336,18 @@ sb.channel('player_times_updates')
         }
       })
   .subscribe();
+  /*  ===== 15. POTWIERDZENIE ZAMKNIĘCIA STRONY ===== */
+/* Pytamy tylko wtedy, gdy użytkownik jest zalogowany (gość może wyjść bez ostrzeżenia). */
+window.addEventListener('beforeunload', event => {
+  if (!isAuthorized) return;            // brak logowania → brak pytania
+
+  /* Standard: trzeba ustawić returnValue, treść komunikatu i tak zostanie zignorowana
+     przez większość przeglądarek, ale samo ustawienie blokuje zamknięcie. */
+  event.preventDefault();
+  event.returnValue = '';
+  /* Nie zwracamy żadnego stringa – przeglądarka pokaże swój domyślny tekst. */
+});
+
 </script>
 
 </body>
