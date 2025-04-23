@@ -4,82 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Miernik czasu gry</title>
-  <style>
-    body {
-      font-family: Arial, Helvetica, sans-serif;
-      margin: 2rem;
-    }
-
-    h1 {
-      font-size: 2rem;
-      margin-bottom: 1rem;
-    }
-
-    .players {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-      gap: 0.5rem;
-      margin-bottom: 1rem;
-    }
-
-    .player {
-      padding: 0.8rem;
-      text-align: center;
-      border: 1px solid #888;
-      border-radius: 8px;
-      cursor: pointer;
-      user-select: none;
-      transition: background 0.2s;
-    }
-
-    .player.selected {
-      background: #b3d4fc;
-    }
-
-    .buttons {
-      margin: 1rem 0;
-    }
-
-    button {
-      padding: 0.6rem 1.2rem;
-      font-size: 1rem;
-      margin-right: 0.5rem;
-      border-radius: 6px;
-      border: 1px solid #555;
-      cursor: pointer;
-    }
-
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      max-width: 500px;
-    }
-
-    th,
-    td {
-      padding: 0.4rem 0.6rem;
-      border: 1px solid #ccc;
-      text-align: center;
-    }
-
-    th {
-      background: #f2f2f2;
-    }
-
-    #authSection {
-      margin-bottom: 1.5rem;
-    }
-
-    #authSection input {
-      padding: 0.4rem 0.6rem;
-      font-size: 1rem;
-    }
-  </style>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <h1>Miernik czasu gry</h1>
@@ -235,7 +160,7 @@
       const current = format(totals[name]);
       const input = prompt(`Podaj nowy czas dla gracza ${name} (hh:mm:ss):`, current);
       if (!input) return;
-      const match = input.trim().match(/^\\d\\d:\\d\\d:\\d\\d$/);
+      const match = input.trim().match(/^\d\d:\d\d:\d\d$/);
       if (!match) {
         alert('Niepoprawny format czasu. Użyj hh:mm:ss');
         return;
