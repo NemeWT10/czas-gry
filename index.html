@@ -40,21 +40,22 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <button onclick="loadTimes()">🔄 Testuj loadTimes()</button>
 
+<!-- Supabase + logika timerów -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /*  ===== 1. KONFIGURACJA SUPABASE ===== */
 const SUPABASE_URL      = 'https://rwjmnrsqsqugftcdspfg.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3am1ucnNxc3F1Z2Z0Y2RzcGZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU0MTI5NDEsImV4cCI6MjA2MDk4ODk0MX0.ijTNOsWQJJJCMlecCcmuoM88Ue3oKiouQw17DwFZEW0';
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /*  ===== 2. STAŁE / ZMIENNE APLIKACJI ===== */
 const PLAYER_COUNT = 16;
-const PASSWORD     = 'admin';          // lok. hasło (możesz usunąć, gdy przejdziesz na Supabase Auth)
-
-const players       = [];
-const totals        = {};              // { A: ms, B: ms, ... }
-const activeStarts  = {};              // { A: tsStart, ... }
-let   isAuthorized  = false;
-let   timerInterval = null;
+const PASSWORD     = 'admin';
+const players      = [];
+const totals       = {};
+const activeStarts = {};
+let isAuthorized   = false;
+let timerInterval  = null;
 
 /*  ===== 3. ELEMENTY DOM ===== */
 const playersContainer = document.getElementById('players');
@@ -72,9 +73,8 @@ for (let i = 0; i < PLAYER_COUNT; i++) {
   players.push(name);
   totals[name] = 0;
 
-  /* kafelek gracza */
   const div = document.createElement('div');
-  div.className   = 'player';
+  div.className = 'player';
   div.textContent = name;
   div.dataset.name = name;
   div.addEventListener('click', () => {
@@ -83,7 +83,6 @@ for (let i = 0; i < PLAYER_COUNT; i++) {
   });
   playersContainer.appendChild(div);
 
-  /* wiersz w tabeli */
   const row = document.createElement('tr');
   row.innerHTML = `
     <td>${name}</td>
@@ -102,23 +101,24 @@ function format(ms) {
   return `${h}:${m}:${s}`;
 }
 
-/*  ===== 6. LOGOWANIE LOKALNYM HASŁEM  ===== */
+/*  ===== 6. LOGOWANIE LOKALNYM HASŁEM ===== */
 loginBtn.addEventListener('click', () => {
   if (pwdInput.value === PASSWORD) {
-    isAuthorized           = true;
+    isAuthorized = true;
     authSection.style.display = 'none';
     enableControls();
   } else {
     alert('Błędne hasło.');
   }
 });
+
 function enableControls() {
   startBtn.disabled = false;
   resetBtn.disabled = false;
   document.querySelectorAll('.editBtn').forEach(b => (b.disabled = false));
 }
 
-/*  ===== 7. POBIERANIE POCZĄTKOWYCH DANYCH Z SUPABASE ===== */
+/*  ===== 7. POBIERANIE DANYCH Z SUPABASE ===== */
 async function loadTimes() {
   console.log('[loadTimes] Start');
   const { data, error } = await supabase.from('player_times').select();
@@ -144,7 +144,7 @@ async function loadTimes() {
 
 window.addEventListener('DOMContentLoaded', loadTimes);
 
-/*  ===== 8. SYNC DO SUPABASE  ===== */
+/*  ===== 8. ZAPIS DO SUPABASE ===== */
 async function syncTime(name) {
   console.log(`[syncTime] Zapisuję czas gracza ${name}: ${totals[name]} ms`);
   const { error } = await supabase
@@ -158,7 +158,6 @@ async function syncTime(name) {
     console.log(`[syncTime] Zapis zakończony dla gracza ${name}`);
   }
 }
-
 
 /*  ===== 9. OBSŁUGA PRZYCISKÓW START/STOP/RESET ===== */
 startBtn.addEventListener('click', () => {
@@ -187,7 +186,7 @@ stopBtn.addEventListener('click', () => {
   clearInterval(timerInterval);
   timerInterval = null;
   refreshSummary();
-  players.forEach(syncTime);        // ⬅ zapisujemy każdy zmieniony wynik
+  players.forEach(syncTime);
 });
 
 resetBtn.addEventListener('click', () => {
@@ -198,7 +197,7 @@ resetBtn.addEventListener('click', () => {
   players.forEach(syncTime);
 });
 
-/*  ===== 10. EDYCJA RĘCZNA W TABELI ===== */
+/*  ===== 10. EDYCJA CZASU MANUALNA ===== */
 summaryBody.addEventListener('click', e => {
   if (!e.target.classList.contains('editBtn')) return;
   if (!isAuthorized) return alert('Najpierw zaloguj się hasłem.');
@@ -216,7 +215,7 @@ summaryBody.addEventListener('click', e => {
   const [hh, mm, ss] = input.split(':').map(Number);
   totals[name] = ((hh * 3600 + mm * 60 + ss) * 1000);
   refreshSummary();
-  syncTime(name);                   // ⬅ zapis pojedynczego gracza
+  syncTime(name);
 });
 
 /*  ===== 11. ODŚWIEŻANIE WIDOKU ===== */
@@ -234,7 +233,7 @@ function updateLiveTimes() {
   });
 }
 
-/*  ===== 12. (OPCJONALNIE) REALTIME PUSH  ===== */
+/*  ===== 12. NASŁUCH REALTIME (opcjonalnie) ===== */
 supabase.channel('player_times_updates')
   .on('postgres_changes',
       { event: '*', schema: 'public', table: 'player_times' },
@@ -244,6 +243,7 @@ supabase.channel('player_times_updates')
       })
   .subscribe();
 </script>
+
 
 </body>
 </html>
