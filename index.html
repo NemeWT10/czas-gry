@@ -93,6 +93,13 @@ const players        = [];
 const totals         = {};          // { A: ms, … }
 const activeStarts   = {};
 let   isAuthorized   = false;
+const UID_FULL_ACCESS  = '88bb8df2-5acc-495a-af8e-5ae0bd5a57f8';
+const UID_ADMIN_VIEW   = 'aa75eebb-b8e4-4630-9f32-8a3941633be2';
+
+let currentUID = null;
+let canEdit    = false;
+let canSeeAdmin = false;
+  
 let   timerInterval  = null;        // odświeżanie widoku 1 s
 let   autoSaveInterval = null;      // autosave do bazy co 10 s
 
@@ -124,10 +131,11 @@ for (let i = 0; i < PLAYER_COUNT; i++) {
   tile.className   = 'player';
   tile.textContent = name;
   tile.dataset.name = name;
-  tile.addEventListener('click', () => {
-    if (!isAuthorized) return;
-    tile.classList.toggle('selected');
-  });
+tile.addEventListener('click', () => {
+  if (!canEdit) return;
+  tile.classList.toggle('selected');
+});
+
   playersContainer.appendChild(tile);
 
   const row = document.createElement('tr');
@@ -156,17 +164,34 @@ const nowMs = n => totals[n] + (n in activeStarts ? Date.now() - activeStarts[n]
 function enableControls() {
   startBtn.disabled = false;
   resetBtn.disabled = false;
-  document.querySelectorAll('.editBtn'  ).forEach(b => b.disabled = false);
-  document.querySelectorAll('.renameBtn').forEach(b => b.disabled = false);
-  adminBtn.style.display = 'inline-block';   // przycisk pojawia się po autoryzacji
-  backBtn.style.display  = 'none';
+  if (canEdit) {
+    document.querySelectorAll('.editBtn'  ).forEach(b => b.disabled = false);
+    document.querySelectorAll('.renameBtn').forEach(b => b.disabled = false);
+  }
 }
+
 function userAuthorized() {
   isAuthorized = true;
   authSection.style.display = 'none';
-  enableControls();
-  loadTimes();
+
+  // Rozpoznaj użytkownika po UID
+  sb.auth.getUser().then(({ data: { user } }) => {
+    currentUID = user?.id;
+    canEdit = currentUID === UID_FULL_ACCESS;
+    canSeeAdmin = [UID_FULL_ACCESS, UID_ADMIN_VIEW].includes(currentUID);
+
+    if (canEdit) {
+      enableControls();
+    }
+
+    if (canSeeAdmin) {
+      adminBtn.style.display = 'inline-block';
+    }
+
+    loadTimes();
+  });
 }
+
 
 /*  ===== 5a. TRYB ADMIN / BACK ===== */
 adminBtn.addEventListener('click', () => {
@@ -403,8 +428,8 @@ function rebuildUI() {
     tile.textContent = name;
     tile.dataset.name = name;
     tile.addEventListener('click', () => {
-      if (!isAuthorized) return;
-      tile.classList.toggle('selected');
+if (!canEdit) return alert('You are not allowed to edit.');
+
     });
     playersContainer.appendChild(tile);
 
@@ -414,8 +439,9 @@ function rebuildUI() {
       <td>${name}</td>
       <td id="time-${name}">${format(totals[name])}</td>
       <td>
-        <button class="editBtn"   data-name="${name}" ${isAuthorized?'':'disabled'}>Edit time</button>
-        <button class="renameBtn" data-name="${name}" ${isAuthorized?'':'disabled'}>Change name</button>
+<button class="editBtn"   data-name="${name}" ${canEdit?'':'disabled'}>Edit time</button>
+<button class="renameBtn" data-name="${name}" ${canEdit?'':'disabled'}>Change name</button>
+
       </td>
       <td class="payCell" id="pay-${name}" style="display:${adminMode?'table-cell':'none'}">‑</td>`;
     summaryBody.appendChild(row);
