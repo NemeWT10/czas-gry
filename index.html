@@ -171,27 +171,26 @@ function enableControls() {
   }
 }
 
-function userAuthorized() {
+async function userAuthorized() {
   isAuthorized = true;
   authSection.style.display = 'none';
 
-  // Rozpoznaj użytkownika po UID
-  sb.auth.getUser().then(({ data: { user } }) => {
-    currentUID = user?.id;
-    canEdit = currentUID === UID_FULL_ACCESS;
-    canSeeAdmin = [UID_FULL_ACCESS, UID_ADMIN_VIEW].includes(currentUID);
+  const { data: { user } } = await sb.auth.getUser();
+  currentUID = user?.id;
+  canEdit = currentUID === UID_FULL_ACCESS;
+  canSeeAdmin = [UID_FULL_ACCESS, UID_ADMIN_VIEW].includes(currentUID);
 
-    if (canEdit) {
-      enableControls();
-    }
+  if (canSeeAdmin) {
+    adminBtn.style.display = 'inline-block';
+  }
 
-    if (canSeeAdmin) {
-      adminBtn.style.display = 'inline-block';
-    }
+  if (canEdit) {
+    enableControls();
+  }
 
-    loadTimes();
-  });
+  await loadTimes(); // budowanie UI dopiero po ustaleniu ról
 }
+
 
 
 /*  ===== 5a. TRYB ADMIN / BACK ===== */
@@ -429,11 +428,10 @@ function rebuildUI() {
     tile.textContent = name;
     tile.dataset.name = name;
     tile.addEventListener('click', () => {
-if (!isAuthorized) return;
-tile.classList.toggle('selected');
+  if (!isAuthorized) return;
+  tile.classList.toggle('selected');
+});
 
-
-    });
     playersContainer.appendChild(tile);
 
     const row = document.createElement('tr');
