@@ -27,7 +27,7 @@
     <span id="totalAll">00:00:00</span>
   </h3>
 
-  <h2>Wybierz graczy</h2>
+  <h2>Choose players</h2>
   <div class="players" id="players"></div>
 
   <div class="buttons">
@@ -98,8 +98,8 @@ for (let i = 0; i < PLAYER_COUNT; i++) {
     <td>${name}</td>
     <td id="time-${name}">00:00:00</td>
     <td>
-      <button class="editBtn"   data-name="${name}" disabled>Edytuj czas</button>
-      <button class="renameBtn" data-name="${name}" disabled>Zmień nazwę</button>
+      <button class="editBtn"   data-name="${name}" disabled>Edit time</button>
+      <button class="renameBtn" data-name="${name}" disabled>Change name</button>
     </td>`;
   summaryBody.appendChild(row);
 }
