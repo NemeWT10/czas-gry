@@ -355,6 +355,10 @@ sb.channel('player_times_updates')
         const newName = payload.new?.name;
         const oldName = payload.old?.name;
 
+        /* ------------- FIX podwójnego naliczania ------------- */
+        if (newName && (newName in activeStarts)) return;
+        /* ------------------------------------------------------ */
+
         if (newName && oldName && newName !== oldName) {
           totals[newName] = totals[oldName] ?? payload.new.total_ms;
           delete totals[oldName];
