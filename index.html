@@ -37,241 +37,306 @@
     <tbody id="summaryBody"></tbody>
   </table>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script>
-  /*  ===== 1. KONFIGURACJA SUPABASE ===== */
-  const SUPABASE_URL = 'https://rwjmnrsqsqugftcdspfg.supabase.co';
-  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3am1ucnNxc3F1Z2Z0Y2RzcGZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU0MTI5NDEsImV4cCI6MjA2MDk4ODk0MX0.ijTNOsWQJJJCMlecCcmuoM88Ue3oKiouQw17DwFZEW0';
-  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/*  ===== 1. KONFIGURACJA SUPABASE ===== */
+const SUPABASE_URL = 'https://rwjmnrsqsqugftcdspfg.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3am1ucnNxc3F1Z2Z0Y2RzcGZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU0MTI5NDEsImV4cCI6MjA2MDk4ODk0MX0.ijTNOsWQJJJCMlecCcmuoM88Ue3oKiouQw17DwFZEW0';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  /*  ===== 2. ZMIENNE APLIKACJI ===== */
-  const PLAYER_COUNT   = 16;          // A-P
-  const players        = [];
-  const totals         = {};          // { A: ms, B: ms, … }
-  const activeStarts   = {};          // { A: timestampStart, … }
-  let   isAuthorized   = false;
-  let   timerInterval  = null;        // odświeżanie widoku co 1 s
+/*  ===== 2. ZMIENNE APLIKACJI ===== */
+const PLAYER_COUNT   = 16;          // A-P
+const players        = [];
+const totals         = {};          // { A: ms, … }
+const activeStarts   = {};
+let   isAuthorized   = false;
+let   timerInterval  = null;
 
-  /*  ===== 3. ELEMENTY DOM ===== */
-  const playersContainer = document.getElementById('players');
-  const summaryBody      = document.getElementById('summaryBody');
-  const startBtn         = document.getElementById('startBtn');
-  const stopBtn          = document.getElementById('stopBtn');
-  const resetBtn         = document.getElementById('resetBtn');
-  const loginBtn         = document.getElementById('loginBtn');
-  const emailInput       = document.getElementById('emailInput');
-  const pwdInput         = document.getElementById('pwdInput');
-  const authSection      = document.getElementById('authSection');
+/*  ===== 3. ELEMENTY DOM ===== */
+const playersContainer = document.getElementById('players');
+const summaryBody      = document.getElementById('summaryBody');
+const startBtn         = document.getElementById('startBtn');
+const stopBtn          = document.getElementById('stopBtn');
+const resetBtn         = document.getElementById('resetBtn');
+const loginBtn         = document.getElementById('loginBtn');
+const emailInput       = document.getElementById('emailInput');
+const pwdInput         = document.getElementById('pwdInput');
+const authSection      = document.getElementById('authSection');
 
-  /*  ===== 4. GENERUJ KAFELKI GRACZY ===== */
-  for (let i = 0; i < PLAYER_COUNT; i++) {
-    const name = String.fromCharCode(65 + i);   // A, B, …
-    players.push(name);
-    totals[name] = 0;
+/*  ===== 4. GENERUJ KAFELKI GRACZY ===== */
+for (let i = 0; i < PLAYER_COUNT; i++) {
+  const name = String.fromCharCode(65 + i);
+  players.push(name);
+  totals[name] = 0;
 
-    /* kafelek do wyboru */
+  const tile = document.createElement('div');
+  tile.className   = 'player';
+  tile.textContent = name;
+  tile.dataset.name = name;
+  tile.addEventListener('click', () => {
+    if (!isAuthorized) return;
+    tile.classList.toggle('selected');
+  });
+  playersContainer.appendChild(tile);
+
+  const row = document.createElement('tr');
+  row.innerHTML = `
+    <td>${name}</td>
+    <td id="time-${name}">00:00:00</td>
+    <td>
+      <button class="editBtn"   data-name="${name}" disabled>Edytuj czas</button>
+      <button class="renameBtn" data-name="${name}" disabled>Zmień nazwę</button>
+    </td>`;
+  summaryBody.appendChild(row);
+}
+
+/*  ===== 5. POMOCNICZE ===== */
+const format = ms => {
+  const s  = Math.floor(ms / 1000);
+  const h  = String(Math.floor(s / 3600)).padStart(2,'0');
+  const m  = String(Math.floor((s % 3600) / 60)).padStart(2,'0');
+  const ss = String(s % 60).padStart(2,'0');
+  return `${h}:${m}:${ss}`;
+};
+const nowMs = n => totals[n] + (n in activeStarts ? Date.now() - activeStarts[n] : 0);
+
+function enableControls() {
+  startBtn.disabled = false;
+  resetBtn.disabled = false;
+  document.querySelectorAll('.editBtn'  ).forEach(b => b.disabled = false);
+  document.querySelectorAll('.renameBtn').forEach(b => b.disabled = false);
+}
+function userAuthorized() {
+  isAuthorized = true;
+  authSection.style.display = 'none';
+  enableControls();
+  loadTimes();
+}
+
+/*  ===== 6. LOGOWANIE ===== */
+loginBtn.addEventListener('click', async () => {
+  const email = emailInput.value.trim();
+  const pass  = pwdInput.value;
+  if (!email || !pass) return alert('Podaj e-mail i hasło.');
+
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) return alert('Błąd logowania: ' + error.message);
+  userAuthorized();
+});
+
+/*  ===== 7. SESJA + ŁADOWANIE DANYCH ===== */
+window.addEventListener('DOMContentLoaded', loadTimes);
+(async () => {
+  const { data:{ session } } = await sb.auth.getSession();
+  if (session) userAuthorized();
+})();
+
+/*  ===== 8. SELECT CZASÓW Z BAZY ===== */
+async function loadTimes() {
+  const { data, error } = await sb.from('player_times').select();
+  if (error) return console.error('SELECT', error.message);
+
+  /* czyścimy i przebudowujemy tablice, bo nazwy w bazie mogły się zmienić */
+  for (const n in totals) delete totals[n];
+  players.length = 0;
+
+  data.forEach(r => {
+    totals[r.name] = r.total_ms;
+    players.push(r.name);
+  });
+
+  rebuildUI();
+  refreshSummary();
+}
+
+/*  ===== 9. UPSERT CZASU ===== */
+async function upsertTime(name) {
+  const { error } = await sb
+    .from('player_times')
+    .upsert({ name, total_ms: totals[name] }, { onConflict: 'name' });
+  if (error) console.error('UPSERT', name, error.message);
+}
+
+/*  ===== 10. PRZYCISKI START/STOP/RESET ===== */
+startBtn.addEventListener('click', () => {
+  if (!isAuthorized) return;
+  const selected = [...document.querySelectorAll('.player.selected')];
+  if (!selected.length) return alert('Zaznacz graczy.');
+
+  const now = Date.now();
+  selected.forEach(el => {
+    const n = el.dataset.name;
+    if (!(n in activeStarts)) activeStarts[n] = now;
+  });
+
+  startBtn.disabled = true;
+  stopBtn.disabled  = false;
+  if (!timerInterval) timerInterval = setInterval(updateLiveTimes, 1000);
+});
+
+stopBtn.addEventListener('click', () => {
+  if (!isAuthorized) return;
+  const now = Date.now();
+  for (const n in activeStarts) totals[n] += now - activeStarts[n];
+  for (const n in activeStarts) delete activeStarts[n];
+
+  startBtn.disabled = false;
+  stopBtn.disabled  = true;
+  clearInterval(timerInterval); timerInterval = null;
+
+  refreshSummary();
+  players.forEach(upsertTime);
+});
+
+resetBtn.addEventListener('click', () => {
+  if (!isAuthorized) return;
+  if (!confirm('Resetować wszystkie czasy?')) return;
+  players.forEach(n => totals[n] = 0);
+  refreshSummary();
+  players.forEach(upsertTime);
+});
+
+/*  ===== 11. EDYCJA CZASU / NAZWY ===== */
+summaryBody.addEventListener('click', async e => {
+  /* --- CZAS --- */
+  if (e.target.classList.contains('editBtn')) {
+    if (!isAuthorized) return alert('Zaloguj się.');
+
+    const n   = e.target.dataset.name;
+    if (n in activeStarts) return alert('Najpierw zatrzymaj stoper.');
+
+    const cur = format(totals[n]);
+    const inp = prompt(`Nowy czas dla ${n} (hh:mm:ss):`, cur);
+    if (!inp || !/^\d\d:\d\d:\d\d$/.test(inp.trim())) return;
+
+    const [h, m, s] = inp.split(':').map(Number);
+    totals[n] = ((h*3600 + m*60 + s) * 1000);
+    refreshSummary(); upsertTime(n);
+  }
+
+  /* --- NAZWA --- */
+  if (e.target.classList.contains('renameBtn')) {
+    if (!isAuthorized) return alert('Zaloguj się.');
+    await renamePlayer(e.target.dataset.name);
+  }
+});
+
+/*  ===== 11a. FUNKCJA ZMIANY NAZWY ===== */
+async function renamePlayer(oldName) {
+  const newName = prompt(`Nowa nazwa dla „${oldName}”:`, oldName)?.trim();
+  if (!newName) return;
+
+  if (players.includes(newName))
+    return alert('Taka nazwa już istnieje.');
+
+  /* poprawiony regex – dozwolone litery/cyfry/podkreślenie/myślnik + PL znaki */
+  if (!/^[\wąćęłńóśźżĄĆĘŁŃÓŚŹŻ-]{1,20}$/.test(newName))
+    return alert('Niedozwolone znaki.');
+
+  const { error } = await sb
+    .from('player_times')
+    .update({ name: newName })
+    .eq('name', oldName);
+
+  if (error) return alert('Błąd zmiany nazwy: ' + error.message);
+
+  /* 1. struktury JS */
+  const idx = players.indexOf(oldName);
+  players[idx]     = newName;
+  totals[newName]  = totals[oldName] ?? 0;
+  delete totals[oldName];
+
+  if (oldName in activeStarts) {
+    activeStarts[newName] = activeStarts[oldName];
+    delete activeStarts[oldName];
+  }
+
+  /* 2. DOM – kafelek */
+  const tile = playersContainer.querySelector(`[data-name="${oldName}"]`);
+  if (tile) {
+    tile.dataset.name = newName;
+    tile.textContent  = newName;
+  }
+
+  /* 3. DOM – wiersz tabeli */
+  const row = summaryBody.querySelector(`button[data-name="${oldName}"]`)?.closest('tr');
+  if (row) {
+    row.children[0].textContent = newName;
+    row.querySelector('.editBtn'  ).dataset.name = newName;
+    row.querySelector('.renameBtn').dataset.name = newName;
+    const timeCell = document.getElementById('time-' + oldName);
+    if (timeCell) timeCell.id = 'time-' + newName;
+  }
+
+  refreshSummary();
+}
+
+/*  ===== 12. RENDER / REFRESH ===== */
+function refreshSummary() {
+  players.forEach(n => {
+    const el = document.getElementById('time-' + n);
+    if (el) el.textContent = format(nowMs(n));
+  });
+}
+function updateLiveTimes() { refreshSummary(); }
+
+/*  ===== 13. REBUILD UI (gdy nazwy w bazie się zmieniły) ===== */
+function rebuildUI() {
+  /* czyścimy kontenery */
+  playersContainer.textContent = '';
+  summaryBody.textContent      = '';
+
+  players.forEach(name => {
+    /* kafelek */
     const tile = document.createElement('div');
     tile.className   = 'player';
     tile.textContent = name;
     tile.dataset.name = name;
     tile.addEventListener('click', () => {
-      if (!isAuthorized) return;                // gość – ignorujemy klik
+      if (!isAuthorized) return;
       tile.classList.toggle('selected');
     });
     playersContainer.appendChild(tile);
 
-    /* wiersz w tabeli podsumowania */
+    /* wiersz */
     const row = document.createElement('tr');
     row.innerHTML = `
       <td>${name}</td>
-      <td id="time-${name}">00:00:00</td>
+      <td id="time-${name}">${format(totals[name])}</td>
       <td>
-        <button class="editBtn"   data-name="${name}" disabled>Edytuj czas</button>
-        <button class="renameBtn" data-name="${name}" disabled>Zmień nazwę</button>
+        <button class="editBtn"   data-name="${name}" ${isAuthorized?'':'disabled'}>Edytuj czas</button>
+        <button class="renameBtn" data-name="${name}" ${isAuthorized?'':'disabled'}>Zmień nazwę</button>
       </td>`;
     summaryBody.appendChild(row);
-  }
-
-  /*  ===== 5. POMOCNICZE ===== */
-  const format = ms => {
-    const s  = Math.floor(ms / 1000);
-    const h  = String(Math.floor(s / 3600)).padStart(2,'0');
-    const m  = String(Math.floor((s % 3600) / 60)).padStart(2,'0');
-    const ss = String(s % 60).padStart(2,'0');
-    return `${h}:${m}:${ss}`;
-  };
-  const nowMs = name =>
-    totals[name] + (name in activeStarts ? Date.now() - activeStarts[name] : 0);
-
-  function enableControls() {
-    startBtn.disabled = false;
-    resetBtn.disabled = false;
-    document.querySelectorAll('.editBtn'  ).forEach(b => b.disabled = false);
-    document.querySelectorAll('.renameBtn').forEach(b => b.disabled = false);
-  }
-  function userAuthorized() {
-    isAuthorized = true;
-    authSection.style.display = 'none';
-    enableControls();
-    loadTimes();                       // odśwież po zalogowaniu
-  }
-
-  /*  ===== 6. LOGOWANIE ===== */
-  loginBtn.addEventListener('click', async () => {
-    const email = emailInput.value.trim();
-    const pass  = pwdInput.value;
-    if (!email || !pass) return alert('Podaj e-mail i hasło.');
-
-    const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-    if (error) return alert('Błąd logowania: ' + error.message);
-
-    userAuthorized();
   });
+}
 
-  /*  ===== 7. SESJA + ŁADOWANIE DANYCH DLA GOŚCIA ===== */
-  window.addEventListener('DOMContentLoaded', loadTimes);
-  (async () => {
-    const { data:{ session } } = await sb.auth.getSession();
-    if (session) userAuthorized();
-  })();
+/*  ===== 14. REALTIME (opcjonalnie) ===== */
+sb.channel('player_times_updates')
+  .on('postgres_changes',
+      { event:'*', schema:'public', table:'player_times' },
+      payload => {
+        /* payload.old & payload.new dają możliwość wykrycia zmiany nazwy */
+        const newName = payload.new?.name;
+        const oldName = payload.old?.name;
 
-  /*  ===== 8. POBIERANIE CZASÓW Z BAZY ===== */
-  async function loadTimes() {
-    const { data, error } = await sb.from('player_times').select();
-    if (error) return console.error('SELECT error:', error.message);
-    data.forEach(r => totals[r.name] = r.total_ms);
-    refreshSummary();
-  }
+        if (newName && oldName && newName !== oldName) {
+          /* update nazwy wykonanej gdzie indziej */
+          totals[newName] = totals[oldName] ?? payload.new.total_ms;
+          delete totals[oldName];
 
-  /*  ===== 9. ZAPIS DO BAZY (manualny) ===== */
-  async function upsertTime(name) {
-    const { error } = await sb
-      .from('player_times')
-      .upsert({ name, total_ms: totals[name] }, { onConflict: 'name' });
-    if (error) console.error('UPSERT', name, error.message);
-  }
+          const idx = players.indexOf(oldName);
+          if (idx !== -1) players[idx] = newName;
 
-  /*  ===== 10. START / STOP / RESET ===== */
-  startBtn.addEventListener('click', () => {
-    if (!isAuthorized) return;
-    const selected = [...document.querySelectorAll('.player.selected')];
-    if (!selected.length) return alert('Zaznacz graczy.');
+          rebuildUI();
+        } else if (newName) {
+          totals[newName] = payload.new.total_ms;
+          if (!players.includes(newName)) players.push(newName);
+          refreshSummary();
+        }
+      })
+  .subscribe();
+</script>
 
-    const now = Date.now();
-    selected.forEach(el => {
-      const n = el.dataset.name;
-      if (!(n in activeStarts)) activeStarts[n] = now;
-    });
-
-    startBtn.disabled = true;
-    stopBtn.disabled  = false;
-    if (!timerInterval) timerInterval = setInterval(updateLiveTimes, 1000);
-  });
-
-  stopBtn.addEventListener('click', () => {
-    if (!isAuthorized) return;
-    const now = Date.now();
-    for (const n in activeStarts) totals[n] += now - activeStarts[n];
-    for (const n in activeStarts) delete activeStarts[n];
-
-    startBtn.disabled = false;
-    stopBtn.disabled  = true;
-    clearInterval(timerInterval); timerInterval = null;
-
-    refreshSummary();
-    players.forEach(upsertTime);        // zapis końcowy
-  });
-
-  resetBtn.addEventListener('click', () => {
-    if (!isAuthorized) return;
-    if (!confirm('Resetować wszystkie czasy?')) return;
-    players.forEach(n => totals[n] = 0);
-    refreshSummary();
-    players.forEach(upsertTime);        // zapis po resecie
-  });
-
-  /*  ===== 11. EDYCJA CZASU I NAZWY ===== */
-  summaryBody.addEventListener('click', async e => {
-    /* — edycja czasu — */
-    if (e.target.classList.contains('editBtn')) {
-      if (!isAuthorized) return alert('Zaloguj się.');
-
-      const n   = e.target.dataset.name;
-      if (n in activeStarts) return alert('Najpierw zatrzymaj stoper.');
-
-      const cur = format(totals[n]);
-      const inp = prompt(`Nowy czas dla ${n} (hh:mm:ss):`, cur);
-      if (!inp || !/^\d\d:\d\d:\d\d$/.test(inp.trim())) return;
-
-      const [h, m, s] = inp.split(':').map(Number);
-      totals[n] = ((h*3600 + m*60 + s) * 1000);
-      refreshSummary(); upsertTime(n);
-    }
-
-    /* — zmiana nazwy — */
-    if (e.target.classList.contains('renameBtn')) {
-      if (!isAuthorized) return alert('Zaloguj się.');
-      const oldName = e.target.dataset.name;
-      await renamePlayer(oldName);
-    }
-  });
-
-  /*  ===== 11a. FUNKCJA ZMIANY NAZWY ===== */
-  async function renamePlayer(oldName) {
-    const newName = prompt(`Nowa nazwa dla gracza „${oldName}”:`, oldName)?.trim();
-    if (!newName)                   return;                       // anulowano
-    if (players.includes(newName)) return alert('Taka nazwa już istnieje.');
-    if (!/^[\\wąćęłńóśźżĄĆĘŁŃÓŚŹŻ-]{1,20}$/.test(newName))
-         return alert('Niedozwolone znaki.');
-
-    /* 1. Aktualizacja w bazie */
-    const { error } = await sb
-        .from('player_times')
-        .update({ name: newName })
-        .eq('name', oldName);
-    if (error) return alert('Błąd zmiany nazwy: ' + error.message);
-
-    /* 2. Aktualizacja struktur JS */
-    const idx = players.indexOf(oldName);
-    players[idx] = newName;
-    totals[newName] = totals[oldName] ?? 0; delete totals[oldName];
-    if (oldName in activeStarts) {
-      activeStarts[newName] = activeStarts[oldName]; delete activeStarts[oldName];
-    }
-
-    /* 3. Aktualizacja DOM */
-    /* kafelek */
-    const tile = playersContainer.querySelector(`[data-name="${oldName}"]`);
-    tile.dataset.name = newName;
-    tile.textContent  = newName;
-
-    /* wiersz tabeli */
-    const row = summaryBody.querySelector(`button[data-name="${oldName}"]`).closest('tr');
-    row.children[0].textContent = newName;                             // komórka z imieniem
-    row.querySelector('.editBtn'  ).dataset.name = newName;
-    row.querySelector('.renameBtn').dataset.name = newName;
-
-    const timeCell = document.getElementById('time-' + oldName);
-    if (timeCell) timeCell.id = 'time-' + newName;
-
-    refreshSummary();
-  }
-
-  /*  ===== 12. ODŚWIEŻANIE WIDOKU ===== */
-  function refreshSummary() {
-    players.forEach(n => {
-      const el = document.getElementById('time-' + n);
-      if (el) el.textContent = format(nowMs(n));
-    });
-  }
-  function updateLiveTimes() { refreshSummary(); }
-
-  /*  ===== 13. REALTIME (opcjonalnie) ===== */
-  sb.channel('player_times_updates')
-    .on('postgres_changes',
-        { event:'*', schema:'public', table:'player_times' },
-        p => { totals[p.new.name] = p.new.total_ms; refreshSummary(); })
-    .subscribe();
-  </script>
 </body>
 </html>
