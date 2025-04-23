@@ -337,8 +337,8 @@ function rebuildUI() {
       <td>${name}</td>
       <td id="time-${name}">${format(totals[name])}</td>
       <td>
-        <button class="editBtn"   data-name="${name}" ${isAuthorized?'':'disabled'}>Edytuj czas</button>
-        <button class="renameBtn" data-name="${name}" ${isAuthorized?'':'disabled'}>Zmień nazwę</button>
+        <button class="editBtn"   data-name="${name}" ${isAuthorized?'':'disabled'}>Edit time</button>
+        <button class="renameBtn" data-name="${name}" ${isAuthorized?'':'disabled'}>Change name</button>
       </td>`;
     summaryBody.appendChild(row);
   });
