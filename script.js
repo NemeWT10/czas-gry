@@ -1,0 +1,407 @@
+<script>
+/*  ===== 1. KONFIGURACJA SUPABASE ===== */
+const SUPABASE_URL = 'https://rwjmnrsqsqugftcdspfg.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3am1ucnNxc3F1Z2Z0Y2RzcGZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU0MTI5NDEsImV4cCI6MjA2MDk4ODk0MX0.ijTNOsWQJJJCMlecCcmuoM88Ue3oKiouQw17DwFZEW0';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/*  ===== 2. ZMIENNE APLIKACJI ===== */
+const PLAYER_COUNT   = 16;          // A‑P
+const TOTAL_PAYOUT   = 600;         // stała wypłata w trybie ADMIN
+let   adminMode      = false;       // czy aktywny widok ADMIN
+
+const players        = [];
+const totals         = {};          // { A: ms, … }
+const activeStarts   = {};
+let   isAuthorized   = false;
+const UID_FULL_ACCESS  = '88bb8df2-5acc-495a-af8e-5ae0bd5a57f8';
+const UID_ADMIN_VIEW   = 'aa75eebb-b8e4-4630-9f32-8a3941633be2';
+
+let currentUID = null;
+let canEdit    = false;
+let canSeeAdmin = false;
+  
+let   timerInterval  = null;        // odświeżanie widoku 1 s
+let   autoSaveInterval = null;      // autosave do bazy co 10 s
+
+/*  ===== 3. ELEMENTY DOM ===== */
+const totalAllEl       = document.getElementById('totalAll');
+const totalPayoutSection = document.getElementById('totalPayoutSection');
+const totalPayoutSpan   = document.getElementById('totalPayout');
+
+const playersContainer = document.getElementById('players');
+const summaryBody      = document.getElementById('summaryBody');
+const startBtn         = document.getElementById('startBtn');
+const stopBtn          = document.getElementById('stopBtn');
+const resetBtn         = document.getElementById('resetBtn');
+const adminBtn         = document.getElementById('adminBtn');
+const backBtn          = document.getElementById('backBtn');
+const loginBtn         = document.getElementById('loginBtn');
+const emailInput       = document.getElementById('emailInput');
+const pwdInput         = document.getElementById('pwdInput');
+const authSection      = document.getElementById('authSection');
+const payHeader        = document.getElementById('payHeader');
+
+/*  ===== 4. GENERUJ KAFELKI GRACZY ===== */
+for (let i = 0; i < PLAYER_COUNT; i++) {
+  const name = String.fromCharCode(65 + i);
+  players.push(name);
+  totals[name] = 0;
+
+  const tile = document.createElement('div');
+  tile.className   = 'player';
+  tile.textContent = name;
+  tile.dataset.name = name;
+tile.addEventListener('click', () => {
+  if (!isAuthorized) return;
+tile.classList.toggle('selected');
+
+});
+
+  playersContainer.appendChild(tile);
+
+  const row = document.createElement('tr');
+  row.dataset.name = name;
+  row.innerHTML = `
+    <td>${name}</td>
+    <td id="time-${name}">00:00:00</td>
+    <td>
+      <button class="editBtn"   data-name="${name}" disabled>Edit time</button>
+      <button class="renameBtn" data-name="${name}" disabled>Change name</button>
+    </td>
+    <td class="payCell" id="pay-${name}" style="display:none">‑</td>`;
+  summaryBody.appendChild(row);
+}
+
+/*  ===== 5. POMOCNICZE FUNKCJE ===== */
+const format = ms => {
+  const s  = Math.floor(ms / 1000);
+  const h  = String(Math.floor(s / 3600)).padStart(2,'0');
+  const m  = String(Math.floor((s % 3600) / 60)).padStart(2,'0');
+  const ss = String(s % 60).padStart(2,'0');
+  return `${h}:${m}:${ss}`;
+};
+const nowMs = n => totals[n] + (n in activeStarts ? Date.now() - activeStarts[n] : 0);
+
+function enableControls() {
+  startBtn.disabled = false;
+  resetBtn.disabled = false;
+  if (canEdit) {
+    document.querySelectorAll('.editBtn'  ).forEach(b => b.disabled = false);
+    document.querySelectorAll('.renameBtn').forEach(b => b.disabled = false);
+  }
+}
+
+async function userAuthorized() {
+  isAuthorized = true;
+  authSection.style.display = 'none';
+
+  const { data: { user } } = await sb.auth.getUser();
+  currentUID = user?.id;
+  canEdit = currentUID === UID_FULL_ACCESS;
+  canSeeAdmin = [UID_FULL_ACCESS, UID_ADMIN_VIEW].includes(currentUID);
+
+  if (canSeeAdmin) {
+    adminBtn.style.display = 'inline-block';
+  }
+
+  if (canEdit) {
+    enableControls();
+  }
+
+  await loadTimes(); // budowanie UI dopiero po ustaleniu ról
+}
+
+
+
+/*  ===== 5a. TRYB ADMIN / BACK ===== */
+adminBtn.addEventListener('click', () => {
+  adminMode = true;
+  payHeader.style.display      = 'table-cell';
+  totalPayoutSection.style.display = 'block';
+  document.querySelectorAll('.payCell').forEach(c => c.style.display = 'table-cell');
+
+  adminBtn.style.display = 'none';
+  backBtn.style.display  = 'inline-block';
+  refreshSummary();
+});
+
+backBtn.addEventListener('click', () => {
+  adminMode = false;
+  payHeader.style.display      = 'none';
+  totalPayoutSection.style.display = 'none';
+  document.querySelectorAll('.payCell').forEach(c => c.style.display = 'none');
+
+  backBtn.style.display  = 'none';
+  adminBtn.style.display = 'inline-block';
+  refreshSummary();
+});
+
+/*  ===== 5b. AUTOSAVE CO 10 s ===== */
+async function autosaveSnapshot() {
+  const rows = players.map(n => ({ name: n, total_ms: nowMs(n) }));
+  const { error } = await sb.from('player_times').upsert(rows, { onConflict: 'name' });
+  if (error) console.error('AUTOSAVE', error.message);
+}
+
+/*  ===== 6. LOGOWANIE ===== */
+loginBtn.addEventListener('click', async () => {
+  const email = emailInput.value.trim();
+  const pass  = pwdInput.value;
+  if (!email || !pass) return alert('Provide e‑mail and password.');
+
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) return alert('Login error: ' + error.message);
+  userAuthorized();
+});
+
+/*  ===== 7. SESJA + ŁADOWANIE DANYCH ===== */
+window.addEventListener('DOMContentLoaded', loadTimes);
+(async () => {
+  const { data:{ session } } = await sb.auth.getSession();
+  if (session) userAuthorized();
+})();
+
+/*  ===== 8. SELECT CZASÓW Z BAZY ===== */
+async function loadTimes() {
+  const { data, error } = await sb.from('player_times').select();
+  if (error) return console.error('SELECT', error.message);
+
+  for (const n in totals) delete totals[n];
+  players.length = 0;
+
+  data.forEach(r => {
+    totals[r.name] = r.total_ms;
+    players.push(r.name);
+  });
+
+  rebuildUI();
+  refreshSummary();
+}
+
+/*  ===== 9. UPSERT POJEDYNCZEGO CZASU (edycja/ręczny reset) ===== */
+async function upsertTime(name) {
+  const { error } = await sb.from('player_times')
+    .upsert({ name, total_ms: totals[name] }, { onConflict: 'name' });
+  if (error) console.error('UPSERT', name, error.message);
+}
+
+/*  ===== 10. PRZYCISKI START / STOP / RESET ===== */
+startBtn.addEventListener('click', () => {
+  if (!isAuthorized) return;
+  const selected = [...document.querySelectorAll('.player.selected')];
+  if (!selected.length) return alert('Select players.');
+
+  const now = Date.now();
+  selected.forEach(el => {
+    const n = el.dataset.name;
+    if (!(n in activeStarts)) activeStarts[n] = now;
+  });
+
+  startBtn.disabled = true;
+  stopBtn.disabled  = false;
+
+  if (!timerInterval)
+    timerInterval = setInterval(updateLiveTimes, 1000);
+
+  if (!autoSaveInterval)
+    autoSaveInterval = setInterval(autosaveSnapshot, 10_000);
+});
+
+stopBtn.addEventListener('click', async () => {
+  if (!isAuthorized) return;
+
+  const now = Date.now();
+  for (const n in activeStarts) totals[n] += now - activeStarts[n];
+  for (const n in activeStarts) delete activeStarts[n];
+
+  startBtn.disabled = false;
+  stopBtn.disabled  = true;
+
+  clearInterval(timerInterval);    timerInterval  = null;
+  clearInterval(autoSaveInterval); autoSaveInterval = null;
+
+  refreshSummary();
+  await autosaveSnapshot();        // zapis końcowy
+  players.forEach(upsertTime);
+});
+
+resetBtn.addEventListener('click', async () => {
+  if (!isAuthorized) return;
+  if (!confirm('Reset all times?')) return;
+
+  players.forEach(n => totals[n] = 0);
+  refreshSummary();
+  players.forEach(upsertTime);
+  await autosaveSnapshot();        // zapis po resecie
+});
+
+/*  ===== 11. EDYCJA CZASU / NAZWY ===== */
+summaryBody.addEventListener('click', async e => {
+  /* --- CZAS --- */
+  if (e.target.classList.contains('editBtn')) {
+    if (!isAuthorized) return alert('Log in.');
+
+    const n   = e.target.dataset.name;
+    if (n in activeStarts) return alert('Stop the timer first.');
+
+    const cur = format(totals[n]);
+    const inp = prompt(`New time for ${n} (hh:mm:ss):`, cur);
+    if (!inp || !/^\d\d:\d\d:\d\d$/.test(inp.trim())) return;
+
+    const [h, m, s] = inp.split(':').map(Number);
+    totals[n] = ((h*3600 + m*60 + s) * 1000);
+    refreshSummary(); upsertTime(n);
+  }
+
+  /* --- NAZWA --- */
+  if (e.target.classList.contains('renameBtn')) {
+    if (!isAuthorized) return alert('Log in.');
+    await renamePlayer(e.target.dataset.name);
+  }
+});
+
+/*  ===== 11a. FUNKCJA ZMIANY NAZWY ===== */
+async function renamePlayer(oldName) {
+  const newName = prompt(`New name for “${oldName}”:`, oldName)?.trim();
+  if (!newName) return;
+
+  if (players.includes(newName))
+    return alert('Name already exists.');
+
+  if (!/^[\wąćęłńóśźżĄĆĘŁŃÓŚŹŻ-]{1,20}$/.test(newName))
+    return alert('Invalid characters.');
+
+  const { error } = await sb
+    .from('player_times')
+    .update({ name: newName })
+    .eq('name', oldName);
+
+  if (error) return alert('Rename error: ' + error.message);
+
+  const idx = players.indexOf(oldName);
+  players[idx]     = newName;
+  totals[newName]  = totals[oldName] ?? 0;
+  delete totals[oldName];
+
+  if (oldName in activeStarts) {
+    activeStarts[newName] = activeStarts[oldName];
+    delete activeStarts[oldName];
+  }
+
+  const tile = playersContainer.querySelector(`[data-name="${oldName}"]`);
+  if (tile) {
+    tile.dataset.name = newName;
+    tile.textContent  = newName;
+  }
+
+  const row = summaryBody.querySelector(`button[data-name="${oldName}"]`)?.closest('tr');
+  if (row) {
+    row.children[0].textContent = newName;
+    row.querySelector('.editBtn'  ).dataset.name = newName;
+    row.querySelector('.renameBtn').dataset.name = newName;
+    const timeCell = document.getElementById('time-' + oldName);
+    if (timeCell) timeCell.id = 'time-' + newName;
+    const payCell = document.getElementById('pay-' + oldName);
+    if (payCell) payCell.id = 'pay-' + newName;
+  }
+
+  refreshSummary();
+}
+
+/*  ===== 12. RENDER / REFRESH ===== */
+function refreshSummary() {
+  const sorted = [...players].sort((a,b) => nowMs(b) - nowMs(a));
+  let sum = 0;
+
+  sorted.forEach(n => sum += nowMs(n));
+
+  sorted.forEach(n => {
+    const ms = nowMs(n);
+    const cell = document.getElementById('time-' + n);
+    if (cell) cell.textContent = format(ms);
+
+    if (adminMode && sum > 0) {
+      const pay = TOTAL_PAYOUT * ms / sum;
+      const payCell = document.getElementById('pay-' + n);
+      if (payCell) payCell.textContent = pay.toFixed(2);
+    } else {
+      const payCell = document.getElementById('pay-' + n);
+      if (payCell) payCell.textContent = '‑';
+    }
+
+    const row = summaryBody.querySelector(`tr[data-name="${n}"]`);
+    if (row) summaryBody.appendChild(row); // sortowanie w DOM
+  });
+
+  if (totalAllEl) totalAllEl.textContent = format(sum);
+}
+function updateLiveTimes() { refreshSummary(); }
+
+/*  ===== 13. REBUILD UI ===== */
+function rebuildUI() {
+  playersContainer.textContent = '';
+  summaryBody.textContent      = '';
+
+  players.forEach(name => {
+    const tile = document.createElement('div');
+    tile.className   = 'player';
+    tile.textContent = name;
+    tile.dataset.name = name;
+    tile.addEventListener('click', () => {
+  if (!isAuthorized) return;
+  tile.classList.toggle('selected');
+});
+
+    playersContainer.appendChild(tile);
+
+    const row = document.createElement('tr');
+    row.dataset.name = name;
+    row.innerHTML = `
+      <td>${name}</td>
+      <td id="time-${name}">${format(totals[name])}</td>
+      <td>
+<button class="editBtn"   data-name="${name}" ${canEdit?'':'disabled'}>Edit time</button>
+<button class="renameBtn" data-name="${name}" ${canEdit?'':'disabled'}>Change name</button>
+
+      </td>
+      <td class="payCell" id="pay-${name}" style="display:${adminMode?'table-cell':'none'}">‑</td>`;
+    summaryBody.appendChild(row);
+  });
+
+  payHeader.style.display      = adminMode ? 'table-cell' : 'none';
+  totalPayoutSection.style.display = adminMode ? 'block' : 'none';
+}
+
+/*  ===== 14. REALTIME NASŁUCH ===== */
+sb.channel('player_times_updates')
+  .on('postgres_changes',
+      { event:'*', schema:'public', table:'player_times' },
+      payload => {
+        const newName = payload.new?.name;
+        const oldName = payload.old?.name;
+
+        /* ------------- FIX podwójnego naliczania ------------- */
+        if (newName && (newName in activeStarts)) return;
+        /* ------------------------------------------------------ */
+
+        if (newName && oldName && newName !== oldName) {
+          totals[newName] = totals[oldName] ?? payload.new.total_ms;
+          delete totals[oldName];
+          const idx = players.indexOf(oldName);
+          if (idx !== -1) players[idx] = newName;
+          rebuildUI();
+        } else if (newName) {
+          totals[newName] = payload.new.total_ms;
+          if (!players.includes(newName)) players.push(newName);
+          refreshSummary();
+        }
+      })
+  .subscribe();
+
+/*  ===== 15. POTWIERDZENIE ZAMKNIĘCIA ===== */
+window.addEventListener('beforeunload', event => {
+  if (!isAuthorized) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
+</script>
