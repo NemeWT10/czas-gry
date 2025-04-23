@@ -149,28 +149,55 @@ async function upsertTime(name, ms) {
 }
 const syncTime = name => upsertTime(name, totals[name]);
 
-/*  ===== 9a. AUTOSAVE co 5 s podczas pracy stopera ===== */
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* … KONFIGURACJA + stałe i DOM — bez zmian … */
+
+/* ===== AUTOSAVE CO 5 s ========================================== */
+function autosaveSnapshot() {
+  if (!isAuthorized) return;                    // zapisy tylko gdy zalogowany
+  if (Object.keys(activeStarts).length === 0) { // nie ma aktywnych stoperów
+    console.log('[autosave] brak aktywnych – pomijam');
+    return;
+  }
+
+  const now = Date.now();
+  Object.keys(activeStarts).forEach(async name => {
+    const ms = totals[name] + (now - activeStarts[name]);
+
+    console.log(`[autosave] ${name} → ${ms} ms`);
+    const { error } = await sb
+      .from('player_times')
+      .update({ total_ms: ms })
+      .eq('name', name);
+
+    if (error) console.error(`[autosave] ${name} błąd:`, error.message);
+  });
+}
+
 function startAutosave() {
-  if (autosaveInterval) return;
-  autosaveInterval = setInterval(() => {
-    if (Object.keys(activeStarts).length === 0) return;   // bezpieczeństwo
-    const now = Date.now();
-    const batch = players.map(n => ({
-      name: n,
-      total_ms: totals[n] + (n in activeStarts ? now - activeStarts[n] : 0)
-    }));
-    sb.from('player_times')
-      .upsert(batch, { onConflict: 'name' })
-      .then(({ error }) => {
-        if (error) console.error('AUTOSAVE error', error.message);
-        else console.log('[autosave] zapisano snapshot');
-      });
-  }, 5000);
+  if (autosaveInterval) clearInterval(autosaveInterval);
+  console.log('[autosave] start');
+  autosaveInterval = setInterval(autosaveSnapshot, 5000);
 }
 function stopAutosave() {
+  if (!autosaveInterval) return;
   clearInterval(autosaveInterval);
   autosaveInterval = null;
+  console.log('[autosave] stop');
 }
+
+/* ===== START / STOP  (tylko miejsca, gdzie wywołujemy autosave) ==== */
+startBtn.addEventListener('click', () => {
+  /* … stara logika … */
+  startAutosave();        // <-- zawsze uruchom
+});
+
+stopBtn.addEventListener('click', () => {
+  /* … stara logika … */
+  stopAutosave();         // <-- zawsze zatrzymaj
+});
+
 
 /*  ===== 10. START / STOP / RESET ===== */
 startBtn.addEventListener('click', () => {
