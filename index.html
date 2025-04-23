@@ -154,12 +154,19 @@ const format = ms => {
 const nowMs = n => totals[n] + (n in activeStarts ? Date.now() - activeStarts[n] : 0);
 
 function enableControls() {
-  startBtn.disabled = false;
-  resetBtn.disabled = false;
-  document.querySelectorAll('.editBtn'  ).forEach(b => b.disabled = false);
-  document.querySelectorAll('.renameBtn').forEach(b => b.disabled = false);
-  adminBtn.style.display = 'inline-block';   // przycisk pojawia się po autoryzacji
-  backBtn.style.display  = 'none';
+  adminBtn.style.display = 'inline-block';
+
+  if (userRole === 'admin') {
+    startBtn.disabled = false;
+    resetBtn.disabled = false;
+    document.querySelectorAll('.editBtn').forEach(b => b.disabled = false);
+    document.querySelectorAll('.renameBtn').forEach(b => b.disabled = false);
+  } else if (userRole === 'limited') {
+    startBtn.disabled = true;
+    resetBtn.disabled = true;
+    document.querySelectorAll('.editBtn').forEach(b => b.disabled = true);
+    document.querySelectorAll('.renameBtn').forEach(b => b.disabled = true);
+  }
 }
 function userAuthorized() {
   isAuthorized = true;
@@ -202,10 +209,16 @@ async function autosaveSnapshot() {
 loginBtn.addEventListener('click', async () => {
   const email = emailInput.value.trim();
   const pass  = pwdInput.value;
-  if (!email || !pass) return alert('Provide e‑mail and password.');
+  if (!email || !pass) return alert('Provide e-mail and password.');
 
   const { error } = await sb.auth.signInWithPassword({ email, password: pass });
   if (error) return alert('Login error: ' + error.message);
+
+  // Przypisanie roli na podstawie adresu
+  if (email === 'wojcikszymek@gmail.com') userRole = 'admin';
+  else if (email === 'showusd@email.pl')   userRole = 'limited';
+  else userRole = 'limited'; // domyślnie ograniczony dostęp
+
   userAuthorized();
 });
 
