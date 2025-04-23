@@ -85,6 +85,7 @@ for (let i = 0; i < PLAYER_COUNT; i++) {
   playersContainer.appendChild(tile);
 
   const row = document.createElement('tr');
+  row.dataset.name = name;
   row.innerHTML = `
     <td>${name}</td>
     <td id="time-${name}">00:00:00</td>
@@ -278,19 +279,28 @@ async function renamePlayer(oldName) {
 
 /*  ===== 12. RENDER / REFRESH ===== */
 function refreshSummary() {
+  /* sortujemy kopię tablicy players na podstawie bieżącego czasu */
+  const sorted = [...players].sort((a, b) => nowMs(b) - nowMs(a));
+
   let sum = 0;
 
-  players.forEach(n => {
+  sorted.forEach(n => {
     const ms = nowMs(n);
     sum += ms;
 
-    const el = document.getElementById('time-' + n);
-    if (el) el.textContent = format(ms);
+    /* aktualizacja komórki z czasem */
+    const cell = document.getElementById('time-' + n);
+    if (cell) cell.textContent = format(ms);
+
+    /* przestawienie wiersza w tabeli */
+    const row = summaryBody.querySelector(`tr[data-name="${n}"]`);
+    if (row) summaryBody.appendChild(row);   // append przenosi na koniec
   });
 
-  /* aktualizacja licznika łącznego czasu */
+  /* łączny czas wszystkich graczy */
   if (totalAllEl) totalAllEl.textContent = format(sum);
 }
+
 
 function updateLiveTimes() { refreshSummary(); }
 
@@ -314,6 +324,7 @@ function rebuildUI() {
 
     /* wiersz */
     const row = document.createElement('tr');
+    row.dataset.name = name;
     row.innerHTML = `
       <td>${name}</td>
       <td id="time-${name}">${format(totals[name])}</td>
