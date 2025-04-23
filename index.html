@@ -4,6 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SQB 2025-II</title>
+
+  <!-- Google-font o „tech-gamingowym” kroju -->
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600&display=swap" rel="stylesheet" />
+
+  <!-- nowy stylesheet -->
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -16,16 +21,23 @@
     <button id="loginBtn">Zaloguj</button>
   </div>
 
+  <!-- ŁĄCZNY CZAS nad kafelkami -->
+  <h3>
+    Łączny czas wszystkich graczy:
+    <span id="totalAll">00:00:00</span>
+  </h3>
+
   <h2>Wybierz graczy</h2>
   <div class="players" id="players"></div>
 
   <div class="buttons">
     <button id="startBtn"  disabled>START</button>
     <button id="stopBtn"   disabled>STOP</button>
-    <button id="resetBtn"  disabled>Resetuj czasy</button>
+    <button id="resetBtn"  disabled>Resetuj&nbsp;czasy</button>
   </div>
 
   <h2>Podsumowanie czasu</h2>
+  <!-- tabela jest centrowana w CSS -->
   <table>
     <thead>
       <tr>
@@ -36,10 +48,6 @@
     </thead>
     <tbody id="summaryBody"></tbody>
   </table>
-<h3>
-  Łączny czas wszystkich graczy:
-  <span id="totalAll">00:00:00</span>
-</h3>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
