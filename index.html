@@ -132,8 +132,9 @@ for (let i = 0; i < PLAYER_COUNT; i++) {
   tile.textContent = name;
   tile.dataset.name = name;
 tile.addEventListener('click', () => {
-  if (!canEdit) return;
-  tile.classList.toggle('selected');
+  if (!isAuthorized) return;
+tile.classList.toggle('selected');
+
 });
 
   playersContainer.appendChild(tile);
@@ -428,7 +429,9 @@ function rebuildUI() {
     tile.textContent = name;
     tile.dataset.name = name;
     tile.addEventListener('click', () => {
-if (!canEdit) return alert('You are not allowed to edit.');
+if (!isAuthorized) return;
+tile.classList.toggle('selected');
+
 
     });
     playersContainer.appendChild(tile);
