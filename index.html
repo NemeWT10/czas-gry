@@ -3,20 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SQB 2025-II</title>
+  <title>SQB 2025‑II</title>
 
-  <!-- Google-font o „tech-gamingowym” kroju -->
+  <!-- Google‑font o „tech‑gamingowym” kroju -->
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600&display=swap" rel="stylesheet" />
 
   <!-- nowy stylesheet -->
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>SQB 2025-II</h1>
+  <h1>SQB 2025‑II</h1>
 
   <!-- sekcja logowania -->
   <div id="authSection">
-    <input  id="emailInput" type="email"    placeholder="E-mail" />
+    <input  id="emailInput" type="email"    placeholder="E‑mail" />
     <input  id="pwdInput"   type="password" placeholder="Hasło"  />
     <button id="loginBtn">Login</button>
   </div>
@@ -27,6 +27,11 @@
     <span id="totalAll">00:00:00</span>
   </h3>
 
+  <!-- widoczny WYŁĄCZNIE w trybie ADMIN -->
+  <h3 id="totalPayoutSection" style="display:none">
+    Total payout: <span id="totalPayout">600</span>
+  </h3>
+
   <h2>Choose players</h2>
   <div class="players" id="players"></div>
 
@@ -34,6 +39,9 @@
     <button id="startBtn"  disabled>START</button>
     <button id="stopBtn"   disabled>STOP</button>
     <button id="resetBtn"  disabled>Reset&nbsp;time</button>
+    <!-- przyciski ADMIN/BACK dodane w nowej funkcjonalności -->
+    <button id="adminBtn" style="display:none">ADMIN</button>
+    <button id="backBtn"  style="display:none">BACK</button>
   </div>
 
   <h2>Summary</h2>
@@ -44,6 +52,8 @@
         <th>Player</th>
         <th>Time (hh:mm:ss)</th>
         <th>Action</th>
+        <!-- nowa kolumna widoczna tylko w trybie ADMIN -->
+        <th id="payHeader" style="display:none">Pay</th>
       </tr>
     </thead>
     <tbody id="summaryBody"></tbody>
@@ -57,7 +67,10 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 /*  ===== 2. ZMIENNE APLIKACJI ===== */
-const PLAYER_COUNT   = 16;          // A-P
+const PLAYER_COUNT   = 16;          // A‑P
+const TOTAL_PAYOUT   = 600;         // stała wypłata w trybie ADMIN
+let   adminMode      = false;       // czy aktywny widok ADMIN
+
 const players        = [];
 const totals         = {};          // { A: ms, … }
 const activeStarts   = {};
@@ -67,15 +80,21 @@ let   autoSaveInterval = null;      // autosave do bazy co 10 s
 
 /*  ===== 3. ELEMENTY DOM ===== */
 const totalAllEl       = document.getElementById('totalAll');
+const totalPayoutSection = document.getElementById('totalPayoutSection');
+const totalPayoutSpan   = document.getElementById('totalPayout');
+
 const playersContainer = document.getElementById('players');
 const summaryBody      = document.getElementById('summaryBody');
 const startBtn         = document.getElementById('startBtn');
 const stopBtn          = document.getElementById('stopBtn');
 const resetBtn         = document.getElementById('resetBtn');
+const adminBtn         = document.getElementById('adminBtn');
+const backBtn          = document.getElementById('backBtn');
 const loginBtn         = document.getElementById('loginBtn');
 const emailInput       = document.getElementById('emailInput');
 const pwdInput         = document.getElementById('pwdInput');
 const authSection      = document.getElementById('authSection');
+const payHeader        = document.getElementById('payHeader');
 
 /*  ===== 4. GENERUJ KAFELKI GRACZY ===== */
 for (let i = 0; i < PLAYER_COUNT; i++) {
@@ -101,7 +120,8 @@ for (let i = 0; i < PLAYER_COUNT; i++) {
     <td>
       <button class="editBtn"   data-name="${name}" disabled>Edit time</button>
       <button class="renameBtn" data-name="${name}" disabled>Change name</button>
-    </td>`;
+    </td>
+    <td class="payCell" id="pay-${name}" style="display:none">‑</td>`;
   summaryBody.appendChild(row);
 }
 
@@ -120,6 +140,8 @@ function enableControls() {
   resetBtn.disabled = false;
   document.querySelectorAll('.editBtn'  ).forEach(b => b.disabled = false);
   document.querySelectorAll('.renameBtn').forEach(b => b.disabled = false);
+  adminBtn.style.display = 'inline-block';   // przycisk pojawia się po autoryzacji
+  backBtn.style.display  = 'none';
 }
 function userAuthorized() {
   isAuthorized = true;
@@ -128,7 +150,30 @@ function userAuthorized() {
   loadTimes();
 }
 
-/*  ===== 5a. AUTOSAVE CO 10 s ===== */
+/*  ===== 5a. TRYB ADMIN / BACK ===== */
+adminBtn.addEventListener('click', () => {
+  adminMode = true;
+  payHeader.style.display      = 'table-cell';
+  totalPayoutSection.style.display = 'block';
+  document.querySelectorAll('.payCell').forEach(c => c.style.display = 'table-cell');
+
+  adminBtn.style.display = 'none';
+  backBtn.style.display  = 'inline-block';
+  refreshSummary();
+});
+
+backBtn.addEventListener('click', () => {
+  adminMode = false;
+  payHeader.style.display      = 'none';
+  totalPayoutSection.style.display = 'none';
+  document.querySelectorAll('.payCell').forEach(c => c.style.display = 'none');
+
+  backBtn.style.display  = 'none';
+  adminBtn.style.display = 'inline-block';
+  refreshSummary();
+});
+
+/*  ===== 5b. AUTOSAVE CO 10 s ===== */
 async function autosaveSnapshot() {
   const rows = players.map(n => ({ name: n, total_ms: nowMs(n) }));
   const { error } = await sb.from('player_times').upsert(rows, { onConflict: 'name' });
@@ -139,7 +184,7 @@ async function autosaveSnapshot() {
 loginBtn.addEventListener('click', async () => {
   const email = emailInput.value.trim();
   const pass  = pwdInput.value;
-  if (!email || !pass) return alert('Provide e-mail and password.');
+  if (!email || !pass) return alert('Provide e‑mail and password.');
 
   const { error } = await sb.auth.signInWithPassword({ email, password: pass });
   if (error) return alert('Login error: ' + error.message);
@@ -293,6 +338,8 @@ async function renamePlayer(oldName) {
     row.querySelector('.renameBtn').dataset.name = newName;
     const timeCell = document.getElementById('time-' + oldName);
     if (timeCell) timeCell.id = 'time-' + newName;
+    const payCell = document.getElementById('pay-' + oldName);
+    if (payCell) payCell.id = 'pay-' + newName;
   }
 
   refreshSummary();
@@ -303,15 +350,24 @@ function refreshSummary() {
   const sorted = [...players].sort((a,b) => nowMs(b) - nowMs(a));
   let sum = 0;
 
+  sorted.forEach(n => sum += nowMs(n));
+
   sorted.forEach(n => {
     const ms = nowMs(n);
-    sum += ms;
-
     const cell = document.getElementById('time-' + n);
     if (cell) cell.textContent = format(ms);
 
+    if (adminMode && sum > 0) {
+      const pay = TOTAL_PAYOUT * ms / sum;
+      const payCell = document.getElementById('pay-' + n);
+      if (payCell) payCell.textContent = pay.toFixed(2);
+    } else {
+      const payCell = document.getElementById('pay-' + n);
+      if (payCell) payCell.textContent = '‑';
+    }
+
     const row = summaryBody.querySelector(`tr[data-name="${n}"]`);
-    if (row) summaryBody.appendChild(row);
+    if (row) summaryBody.appendChild(row); // sortowanie w DOM
   });
 
   if (totalAllEl) totalAllEl.textContent = format(sum);
@@ -342,9 +398,13 @@ function rebuildUI() {
       <td>
         <button class="editBtn"   data-name="${name}" ${isAuthorized?'':'disabled'}>Edit time</button>
         <button class="renameBtn" data-name="${name}" ${isAuthorized?'':'disabled'}>Change name</button>
-      </td>`;
+      </td>
+      <td class="payCell" id="pay-${name}" style="display:${adminMode?'table-cell':'none'}">‑</td>`;
     summaryBody.appendChild(row);
   });
+
+  payHeader.style.display      = adminMode ? 'table-cell' : 'none';
+  totalPayoutSection.style.display = adminMode ? 'block' : 'none';
 }
 
 /*  ===== 14. REALTIME NASŁUCH ===== */
@@ -380,7 +440,5 @@ window.addEventListener('beforeunload', event => {
   event.returnValue = '';
 });
 </script>
-
-
 </body>
 </html>
