@@ -38,6 +38,8 @@
 
   <!-- Supabase + logika timerów -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <button onclick="loadTimes()">🔄 Testuj loadTimes()</button>
+
 <script>
 /*  ===== 1. KONFIGURACJA SUPABASE ===== */
 const SUPABASE_URL      = 'https://rwjmnrsqsqugftcdspfg.supabase.co';
@@ -118,20 +120,45 @@ function enableControls() {
 
 /*  ===== 7. POBIERANIE POCZĄTKOWYCH DANYCH Z SUPABASE ===== */
 async function loadTimes() {
+  console.log('[loadTimes] Start');
   const { data, error } = await supabase.from('player_times').select();
-  if (error) return console.error('SELECT error', error);
-  data.forEach(r => (totals[r.name] = r.total_ms));
+
+  if (error) {
+    console.error('[loadTimes] SELECT error:', error.message);
+    alert('Błąd podczas pobierania danych z Supabase: ' + error.message);
+    return;
+  }
+
+  console.log('[loadTimes] Otrzymane dane:', data);
+  if (!data || !data.length) {
+    console.warn('[loadTimes] Brak danych w tabeli!');
+  }
+
+  data.forEach(row => {
+    console.log(`[loadTimes] Gracz: ${row.name}, Czas: ${row.total_ms} ms`);
+    totals[row.name] = row.total_ms;
+  });
+
   refreshSummary();
 }
+
 window.addEventListener('DOMContentLoaded', loadTimes);
 
 /*  ===== 8. SYNC DO SUPABASE  ===== */
 async function syncTime(name) {
+  console.log(`[syncTime] Zapisuję czas gracza ${name}: ${totals[name]} ms`);
   const { error } = await supabase
     .from('player_times')
     .upsert({ name, total_ms: totals[name] }, { onConflict: 'name' });
-  if (error) console.error('UPSERT error', error);
+
+  if (error) {
+    console.error(`[syncTime] Błąd zapisu dla gracza ${name}:`, error.message);
+    alert(`Błąd zapisu do bazy dla ${name}: ${error.message}`);
+  } else {
+    console.log(`[syncTime] Zapis zakończony dla gracza ${name}`);
+  }
 }
+
 
 /*  ===== 9. OBSŁUGA PRZYCISKÓW START/STOP/RESET ===== */
 startBtn.addEventListener('click', () => {
