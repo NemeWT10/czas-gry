@@ -18,12 +18,12 @@
   <div id="authSection">
     <input  id="emailInput" type="email"    placeholder="E-mail" />
     <input  id="pwdInput"   type="password" placeholder="Hasło"  />
-    <button id="loginBtn">Zaloguj</button>
+    <button id="loginBtn">Login</button>
   </div>
 
   <!-- ŁĄCZNY CZAS nad kafelkami -->
   <h3>
-    Łączny czas wszystkich graczy:
+    Total time of all players:
     <span id="totalAll">00:00:00</span>
   </h3>
 
@@ -33,17 +33,17 @@
   <div class="buttons">
     <button id="startBtn"  disabled>START</button>
     <button id="stopBtn"   disabled>STOP</button>
-    <button id="resetBtn"  disabled>Resetuj&nbsp;czasy</button>
+    <button id="resetBtn"  disabled>Reset&nbsp;time</button>
   </div>
 
-  <h2>Podsumowanie czasu</h2>
+  <h2>Summary</h2>
   <!-- tabela jest centrowana w CSS -->
   <table>
     <thead>
       <tr>
-        <th>Gracz</th>
-        <th>Czas (hh:mm:ss)</th>
-        <th>Akcje</th>
+        <th>Player</th>
+        <th>Time (hh:mm:ss)</th>
+        <th>Action</th>
       </tr>
     </thead>
     <tbody id="summaryBody"></tbody>
