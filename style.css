@@ -91,13 +91,15 @@ button:disabled {
 }
 
 /* ------------- KAFELKI GRACZY ------------- */
+/* --- Kafelki graczy – auto-width ----------------------------------- */
 .players {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  display: flex;             /* zamiast grid */
+  flex-wrap: wrap;
   gap: .6rem;
-  max-width: 650px;
-  width: 100%;
+  justify-content: center;   /* wyśrodkowanie całego wiersza */
+  max-width: 90vw;           /* ograniczenie szerokości kontenera */
 }
+
 
 .player {
   padding: .9rem .4rem;
@@ -106,6 +108,7 @@ button:disabled {
   border-radius: 10px;
   user-select: none;
   transition: background .25s, transform .1s;
+  padding: .9rem 1.4rem; 
 }
 
 .player.selected {
