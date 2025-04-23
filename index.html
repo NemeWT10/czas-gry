@@ -3,20 +3,40 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SQB 2025‑II</title>
+  <title>SQB 2025-II</title>
 
-  <!-- Google‑font o „tech‑gamingowym” kroju -->
+  <!-- Google-font o „tech-gamingowym” kroju -->
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600&display=swap" rel="stylesheet" />
 
-  <!-- nowy stylesheet -->
+  <!-- główny stylesheet  -->
   <link rel="stylesheet" href="style.css" />
+
+  <!-- kolorystyka przycisków ADMIN/BACK -->
+  <style>
+    #adminBtn,
+    #backBtn {
+      background-color: #e53935;  /* red 600  */
+      color: #fff;
+      border: none;
+      padding: 0.5rem 1.25rem;
+      font-weight: 600;
+      letter-spacing: .5px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    #adminBtn:hover,
+    #backBtn:hover {
+      filter: brightness(1.1);
+    }
+  </style>
 </head>
 <body>
-  <h1>SQB 2025‑II</h1>
+  <h1>SQB 2025-II</h1>
 
   <!-- sekcja logowania -->
   <div id="authSection">
-    <input  id="emailInput" type="email"    placeholder="E‑mail" />
+    <input  id="emailInput" type="email"    placeholder="E-mail" />
     <input  id="pwdInput"   type="password" placeholder="Hasło"  />
     <button id="loginBtn">Login</button>
   </div>
@@ -39,20 +59,18 @@
     <button id="startBtn"  disabled>START</button>
     <button id="stopBtn"   disabled>STOP</button>
     <button id="resetBtn"  disabled>Reset&nbsp;time</button>
-    <!-- przyciski ADMIN/BACK dodane w nowej funkcjonalności -->
+    <!-- przyciski ADMIN/BACK -->
     <button id="adminBtn" style="display:none">ADMIN</button>
     <button id="backBtn"  style="display:none">BACK</button>
   </div>
 
   <h2>Summary</h2>
-  <!-- tabela jest centrowana w CSS -->
   <table>
     <thead>
       <tr>
         <th>Player</th>
         <th>Time (hh:mm:ss)</th>
         <th>Action</th>
-        <!-- nowa kolumna widoczna tylko w trybie ADMIN -->
         <th id="payHeader" style="display:none">Pay</th>
       </tr>
     </thead>
