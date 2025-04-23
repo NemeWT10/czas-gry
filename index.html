@@ -36,17 +36,15 @@
     <tbody id="summaryBody"></tbody>
   </table>
 
-  <!-- Supabase + logika timerów -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <button onclick="loadTimes()">🔄 Testuj loadTimes()</button>
-
 <!-- Supabase + logika timerów -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /*  ===== 1. KONFIGURACJA SUPABASE ===== */
-const SUPABASE_URL      = 'https://rwjmnrsqsqugftcdspfg.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3am1ucnNxc3F1Z2Z0Y2RzcGZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU0MTI5NDEsImV4cCI6MjA2MDk4ODk0MX0.ijTNOsWQJJJCMlecCcmuoM88Ue3oKiouQw17DwFZEW0';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const SUPABASE_URL  = 'https://rwjmnrsqsqugftcdspfg.supabase.co';
+const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3am1ucnNxc3F1Z2Z0Y2RzcGZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU0MTI5NDEsImV4cCI6MjA2MDk4ODk0MX0.ijTNOsWQJJJCMlecCcmuoM88Ue3oKiouQw17DwFZEW0';
+
+/*  Klient Supabase – UŻYWAMY INNEJ NAZWY (sb)  */
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 /*  ===== 2. STAŁE / ZMIENNE APLIKACJI ===== */
 const PLAYER_COUNT = 16;
@@ -74,7 +72,7 @@ for (let i = 0; i < PLAYER_COUNT; i++) {
   totals[name] = 0;
 
   const div = document.createElement('div');
-  div.className = 'player';
+  div.className   = 'player';
   div.textContent = name;
   div.dataset.name = name;
   div.addEventListener('click', () => {
@@ -92,7 +90,7 @@ for (let i = 0; i < PLAYER_COUNT; i++) {
   summaryBody.appendChild(row);
 }
 
-/*  ===== 5. FORMATOWANIE CZASU ===== */
+/*  ===== 5. FORMAT CZASU ===== */
 function format(ms) {
   const sec = Math.floor(ms / 1000);
   const h   = String(Math.floor(sec / 3600)).padStart(2, '0');
@@ -101,74 +99,50 @@ function format(ms) {
   return `${h}:${m}:${s}`;
 }
 
-/*  ===== 6. LOGOWANIE LOKALNYM HASŁEM ===== */
+/*  ===== 6. LOGOWANIE HASŁEM ===== */
 loginBtn.addEventListener('click', () => {
   if (pwdInput.value === PASSWORD) {
     isAuthorized = true;
     authSection.style.display = 'none';
-    enableControls();
+    startBtn.disabled = false;
+    resetBtn.disabled = false;
+    document.querySelectorAll('.editBtn').forEach(b => (b.disabled = false));
   } else {
     alert('Błędne hasło.');
   }
 });
 
-function enableControls() {
-  startBtn.disabled = false;
-  resetBtn.disabled = false;
-  document.querySelectorAll('.editBtn').forEach(b => (b.disabled = false));
-}
-
-/*  ===== 7. POBIERANIE DANYCH Z SUPABASE ===== */
+/*  ===== 7. ŁADOWANIE CZASÓW Z BAZY ===== */
 async function loadTimes() {
   console.log('[loadTimes] Start');
-  const { data, error } = await supabase.from('player_times').select();
-
+  const { data, error } = await sb.from('player_times').select();
   if (error) {
     console.error('[loadTimes] SELECT error:', error.message);
-    alert('Błąd podczas pobierania danych z Supabase: ' + error.message);
+    alert('Błąd pobierania danych z Supabase: ' + error.message);
     return;
   }
-
-  console.log('[loadTimes] Otrzymane dane:', data);
-  if (!data || !data.length) {
-    console.warn('[loadTimes] Brak danych w tabeli!');
-  }
-
-  data.forEach(row => {
-    console.log(`[loadTimes] Gracz: ${row.name}, Czas: ${row.total_ms} ms`);
-    totals[row.name] = row.total_ms;
-  });
-
+  data.forEach(r => (totals[r.name] = r.total_ms));
   refreshSummary();
 }
-
 window.addEventListener('DOMContentLoaded', loadTimes);
 
-/*  ===== 8. ZAPIS DO SUPABASE ===== */
+/*  ===== 8. ZAPIS DO BAZY ===== */
 async function syncTime(name) {
-  console.log(`[syncTime] Zapisuję czas gracza ${name}: ${totals[name]} ms`);
-  const { error } = await supabase
+  const { error } = await sb
     .from('player_times')
     .upsert({ name, total_ms: totals[name] }, { onConflict: 'name' });
-
-  if (error) {
-    console.error(`[syncTime] Błąd zapisu dla gracza ${name}:`, error.message);
-    alert(`Błąd zapisu do bazy dla ${name}: ${error.message}`);
-  } else {
-    console.log(`[syncTime] Zapis zakończony dla gracza ${name}`);
-  }
+  if (error) console.error(`[syncTime] ${name}:`, error.message);
 }
 
-/*  ===== 9. OBSŁUGA PRZYCISKÓW START/STOP/RESET ===== */
+/*  ===== 9. START / STOP / RESET ===== */
 startBtn.addEventListener('click', () => {
   if (!isAuthorized) return;
   const selected = [...document.querySelectorAll('.player.selected')];
   if (!selected.length) return alert('Zaznacz przynajmniej jednego gracza.');
-
   const now = Date.now();
   selected.forEach(el => {
-    const name = el.dataset.name;
-    if (!(name in activeStarts)) activeStarts[name] = now;
+    const n = el.dataset.name;
+    if (!(n in activeStarts)) activeStarts[n] = now;
   });
   startBtn.disabled = true;
   stopBtn.disabled  = false;
@@ -178,9 +152,8 @@ startBtn.addEventListener('click', () => {
 stopBtn.addEventListener('click', () => {
   if (!isAuthorized) return;
   const now = Date.now();
-  for (const name in activeStarts) totals[name] += now - activeStarts[name];
-  for (const k in activeStarts) delete activeStarts[k];
-
+  for (const n in activeStarts) totals[n] += now - activeStarts[n];
+  Object.keys(activeStarts).forEach(k => delete activeStarts[k]);
   startBtn.disabled = false;
   stopBtn.disabled  = true;
   clearInterval(timerInterval);
@@ -191,54 +164,49 @@ stopBtn.addEventListener('click', () => {
 
 resetBtn.addEventListener('click', () => {
   if (!isAuthorized) return;
-  if (!confirm('Czy na pewno zresetować wszystkie czasy?')) return;
-  players.forEach(name => (totals[name] = 0));
+  if (!confirm('Resetować wszystkie czasy?')) return;
+  players.forEach(n => (totals[n] = 0));
   refreshSummary();
   players.forEach(syncTime);
 });
 
-/*  ===== 10. EDYCJA CZASU MANUALNA ===== */
+/*  ===== 10. EDYCJA MANUALNA ===== */
 summaryBody.addEventListener('click', e => {
   if (!e.target.classList.contains('editBtn')) return;
   if (!isAuthorized) return alert('Najpierw zaloguj się hasłem.');
-
-  const name = e.target.dataset.name;
-  if (name in activeStarts)
-    return alert('Zatrzymaj pomiar dla tego gracza przed edycją czasu.');
-
-  const current = format(totals[name]);
-  const input = prompt(`Podaj nowy czas dla gracza ${name} (hh:mm:ss):`, current);
-  if (!input) return;
-  if (!/^\d\d:\d\d:\d\d$/.test(input.trim()))
-    return alert('Niepoprawny format. Użyj hh:mm:ss');
-
-  const [hh, mm, ss] = input.split(':').map(Number);
-  totals[name] = ((hh * 3600 + mm * 60 + ss) * 1000);
+  const n = e.target.dataset.name;
+  if (n in activeStarts) return alert('Najpierw zatrzymaj stoper.');
+  const cur = format(totals[n]);
+  const inp = prompt(`Nowy czas dla ${n} (hh:mm:ss):`, cur);
+  if (!inp || !/^\d\d:\d\d:\d\d$/.test(inp.trim()))
+    return alert('Zły format (hh:mm:ss)');
+  const [h,m,s] = inp.split(':').map(Number);
+  totals[n] = ((h*3600+m*60+s)*1000);
   refreshSummary();
-  syncTime(name);
+  syncTime(n);
 });
 
 /*  ===== 11. ODŚWIEŻANIE WIDOKU ===== */
 function refreshSummary() {
-  players.forEach(name => {
-    document.getElementById('time-' + name).textContent = format(totals[name]);
+  players.forEach(n => {
+    document.getElementById('time-' + n).textContent = format(totals[n]);
   });
 }
 function updateLiveTimes() {
   const now = Date.now();
-  players.forEach(name => {
-    let val = totals[name];
-    if (name in activeStarts) val += now - activeStarts[name];
-    document.getElementById('time-' + name).textContent = format(val);
+  players.forEach(n => {
+    let val = totals[n];
+    if (n in activeStarts) val += now - activeStarts[n];
+    document.getElementById('time-' + n).textContent = format(val);
   });
 }
 
-/*  ===== 12. NASŁUCH REALTIME (opcjonalnie) ===== */
-supabase.channel('player_times_updates')
+/*  ===== 12. REALTIME (opcjonalnie) ===== */
+sb.channel('player_times_updates')
   .on('postgres_changes',
       { event: '*', schema: 'public', table: 'player_times' },
-      payload => {
-        totals[payload.new.name] = payload.new.total_ms;
+      p => {
+        totals[p.new.name] = p.new.total_ms;
         refreshSummary();
       })
   .subscribe();
