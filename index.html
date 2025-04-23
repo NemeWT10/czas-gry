@@ -149,29 +149,6 @@ async function upsertTime(name, ms) {
 }
 const syncTime = name => upsertTime(name, totals[name]);
 
-/*  ===== 9a. AUTOSAVE co 5 s podczas pracy stopera ===== */
-function startAutosave() {
-  if (autosaveInterval) return;
-  autosaveInterval = setInterval(() => {
-    if (Object.keys(activeStarts).length === 0) return;   // bezpieczeństwo
-    const now = Date.now();
-    const batch = players.map(n => ({
-      name: n,
-      total_ms: totals[n] + (n in activeStarts ? now - activeStarts[n] : 0)
-    }));
-    sb.from('player_times')
-      .upsert(batch, { onConflict: 'name' })
-      .then(({ error }) => {
-        if (error) console.error('AUTOSAVE error', error.message);
-        else console.log('[autosave] zapisano snapshot');
-      });
-  }, 5000);
-}
-function stopAutosave() {
-  clearInterval(autosaveInterval);
-  autosaveInterval = null;
-}
-
 /*  ===== 10. START / STOP / RESET ===== */
 startBtn.addEventListener('click', () => {
   if (!isAuthorized) return;
