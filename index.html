@@ -42,7 +42,7 @@
 <script>
 /*  ===== 1. KONFIGURACJA SUPABASE ===== */
 const SUPABASE_URL = 'https://rwjmnrsqsqugftcdspfg.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3am1ucnNxc3F1Z2Z0Y2RzcGZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU0MTI5NDEsImV4cCI6MjA2MDk4ODk0MX0.ijTNOsWQJJJCMlecCcmuoM88Ue3oKiouQw17DwFZEW0';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ...DwFZEW0';   // ← wklej pełny anon-key
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 /*  ===== 2. ZMIENNE APLIKACJI ===== */
@@ -74,8 +74,9 @@ for (let i = 0; i < PLAYER_COUNT; i++) {
   div.className = 'player';
   div.textContent = name;
   div.dataset.name = name;
+  /* --- B. klik ignorowany dla gościa --- */
   div.addEventListener('click', () => {
-    if (!isAuthorized) return alert('Najpierw się zaloguj.');
+    if (!isAuthorized) return;        // brak alertu
     div.classList.toggle('selected');
   });
   playersContainer.appendChild(div);
@@ -105,14 +106,13 @@ function userAuthorized() {
   isAuthorized = true;
   authSection.style.display = 'none';
   enableControls();
-  loadTimes();                       // pobierz dane po zalogowaniu
+  loadTimes();                         // odśwież po zalogowaniu
 }
 
 /*  ===== 6. LOGOWANIE ===== */
 loginBtn.addEventListener('click', async () => {
   const email = emailInput.value.trim();
   const password = pwdInput.value;
-
   if (!email || !password) return alert('Podaj e-mail i hasło.');
 
   const { error } = await sb.auth.signInWithPassword({ email, password });
@@ -121,9 +121,12 @@ loginBtn.addEventListener('click', async () => {
   userAuthorized();
 });
 
-/*  ===== 7. SPRAWDŹ, CZY JUŻ JEST SESJA ===== */
+/*  ===== 7. SESJA Z PAMIĘCI + POBIERZ DANE DLA GOŚCIA ===== */
+window.addEventListener('DOMContentLoaded', () => {
+  loadTimes();                         // --- A. zawsze przy starcie ---
+});
 (async () => {
-  const { data: { session } } = await sb.auth.getSession();
+  const { data:{ session } } = await sb.auth.getSession();
   if (session) userAuthorized();
 })();
 
@@ -142,7 +145,7 @@ const syncTime = async name => {
   if (error) console.error('UPSERT', name, error);
 };
 
-/*  ===== 10. OBSŁUGA PRZYCISKÓW START/STOP/RESET ===== */
+/*  ===== 10. START / STOP / RESET ===== */
 startBtn.addEventListener('click', () => {
   if (!isAuthorized) return;
   const selected = [...document.querySelectorAll('.player.selected')];
@@ -209,8 +212,6 @@ sb.channel('player_times_updates')
       p=>{ totals[p.new.name]=p.new.total_ms; refreshSummary(); })
   .subscribe();
 </script>
-
-
 
 </body>
 </html>
