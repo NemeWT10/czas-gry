@@ -62,10 +62,11 @@ const players        = [];
 const totals         = {};          // { A: ms, … }
 const activeStarts   = {};
 let   isAuthorized   = false;
-let   timerInterval  = null;
+let   timerInterval  = null;        // odświeżanie widoku 1 s
+let   autoSaveInterval = null;      // autosave do bazy co 10 s
 
 /*  ===== 3. ELEMENTY DOM ===== */
-const totalAllEl       = document.getElementById('totalAll');   // ⬅️ nowa
+const totalAllEl       = document.getElementById('totalAll');
 const playersContainer = document.getElementById('players');
 const summaryBody      = document.getElementById('summaryBody');
 const startBtn         = document.getElementById('startBtn');
@@ -104,7 +105,7 @@ for (let i = 0; i < PLAYER_COUNT; i++) {
   summaryBody.appendChild(row);
 }
 
-/*  ===== 5. POMOCNICZE ===== */
+/*  ===== 5. POMOCNICZE FUNKCJE ===== */
 const format = ms => {
   const s  = Math.floor(ms / 1000);
   const h  = String(Math.floor(s / 3600)).padStart(2,'0');
@@ -127,14 +128,21 @@ function userAuthorized() {
   loadTimes();
 }
 
+/*  ===== 5a. AUTOSAVE CO 10 s ===== */
+async function autosaveSnapshot() {
+  const rows = players.map(n => ({ name: n, total_ms: nowMs(n) }));
+  const { error } = await sb.from('player_times').upsert(rows, { onConflict: 'name' });
+  if (error) console.error('AUTOSAVE', error.message);
+}
+
 /*  ===== 6. LOGOWANIE ===== */
 loginBtn.addEventListener('click', async () => {
   const email = emailInput.value.trim();
   const pass  = pwdInput.value;
-  if (!email || !pass) return alert('Podaj e-mail i hasło.');
+  if (!email || !pass) return alert('Provide e-mail and password.');
 
   const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-  if (error) return alert('Błąd logowania: ' + error.message);
+  if (error) return alert('Login error: ' + error.message);
   userAuthorized();
 });
 
@@ -150,7 +158,6 @@ async function loadTimes() {
   const { data, error } = await sb.from('player_times').select();
   if (error) return console.error('SELECT', error.message);
 
-  /* czyścimy i przebudowujemy tablice, bo nazwy w bazie mogły się zmienić */
   for (const n in totals) delete totals[n];
   players.length = 0;
 
@@ -163,19 +170,18 @@ async function loadTimes() {
   refreshSummary();
 }
 
-/*  ===== 9. UPSERT CZASU ===== */
+/*  ===== 9. UPSERT POJEDYNCZEGO CZASU (edycja/ręczny reset) ===== */
 async function upsertTime(name) {
-  const { error } = await sb
-    .from('player_times')
+  const { error } = await sb.from('player_times')
     .upsert({ name, total_ms: totals[name] }, { onConflict: 'name' });
   if (error) console.error('UPSERT', name, error.message);
 }
 
-/*  ===== 10. PRZYCISKI START/STOP/RESET ===== */
+/*  ===== 10. PRZYCISKI START / STOP / RESET ===== */
 startBtn.addEventListener('click', () => {
   if (!isAuthorized) return;
   const selected = [...document.querySelectorAll('.player.selected')];
-  if (!selected.length) return alert('Zaznacz graczy.');
+  if (!selected.length) return alert('Select players.');
 
   const now = Date.now();
   selected.forEach(el => {
@@ -185,42 +191,53 @@ startBtn.addEventListener('click', () => {
 
   startBtn.disabled = true;
   stopBtn.disabled  = false;
-  if (!timerInterval) timerInterval = setInterval(updateLiveTimes, 1000);
+
+  if (!timerInterval)
+    timerInterval = setInterval(updateLiveTimes, 1000);
+
+  if (!autoSaveInterval)
+    autoSaveInterval = setInterval(autosaveSnapshot, 10_000);
 });
 
-stopBtn.addEventListener('click', () => {
+stopBtn.addEventListener('click', async () => {
   if (!isAuthorized) return;
+
   const now = Date.now();
   for (const n in activeStarts) totals[n] += now - activeStarts[n];
   for (const n in activeStarts) delete activeStarts[n];
 
   startBtn.disabled = false;
   stopBtn.disabled  = true;
-  clearInterval(timerInterval); timerInterval = null;
+
+  clearInterval(timerInterval);    timerInterval  = null;
+  clearInterval(autoSaveInterval); autoSaveInterval = null;
 
   refreshSummary();
+  await autosaveSnapshot();        // zapis końcowy
   players.forEach(upsertTime);
 });
 
-resetBtn.addEventListener('click', () => {
+resetBtn.addEventListener('click', async () => {
   if (!isAuthorized) return;
-  if (!confirm('Resetować wszystkie czasy?')) return;
+  if (!confirm('Reset all times?')) return;
+
   players.forEach(n => totals[n] = 0);
   refreshSummary();
   players.forEach(upsertTime);
+  await autosaveSnapshot();        // zapis po resecie
 });
 
 /*  ===== 11. EDYCJA CZASU / NAZWY ===== */
 summaryBody.addEventListener('click', async e => {
   /* --- CZAS --- */
   if (e.target.classList.contains('editBtn')) {
-    if (!isAuthorized) return alert('Zaloguj się.');
+    if (!isAuthorized) return alert('Log in.');
 
     const n   = e.target.dataset.name;
-    if (n in activeStarts) return alert('Najpierw zatrzymaj stoper.');
+    if (n in activeStarts) return alert('Stop the timer first.');
 
     const cur = format(totals[n]);
-    const inp = prompt(`Nowy czas dla ${n} (hh:mm:ss):`, cur);
+    const inp = prompt(`New time for ${n} (hh:mm:ss):`, cur);
     if (!inp || !/^\d\d:\d\d:\d\d$/.test(inp.trim())) return;
 
     const [h, m, s] = inp.split(':').map(Number);
@@ -230,31 +247,29 @@ summaryBody.addEventListener('click', async e => {
 
   /* --- NAZWA --- */
   if (e.target.classList.contains('renameBtn')) {
-    if (!isAuthorized) return alert('Zaloguj się.');
+    if (!isAuthorized) return alert('Log in.');
     await renamePlayer(e.target.dataset.name);
   }
 });
 
 /*  ===== 11a. FUNKCJA ZMIANY NAZWY ===== */
 async function renamePlayer(oldName) {
-  const newName = prompt(`Nowa nazwa dla „${oldName}”:`, oldName)?.trim();
+  const newName = prompt(`New name for “${oldName}”:`, oldName)?.trim();
   if (!newName) return;
 
   if (players.includes(newName))
-    return alert('Taka nazwa już istnieje.');
+    return alert('Name already exists.');
 
-  /* poprawiony regex – dozwolone litery/cyfry/podkreślenie/myślnik + PL znaki */
   if (!/^[\wąćęłńóśźżĄĆĘŁŃÓŚŹŻ-]{1,20}$/.test(newName))
-    return alert('Niedozwolone znaki.');
+    return alert('Invalid characters.');
 
   const { error } = await sb
     .from('player_times')
     .update({ name: newName })
     .eq('name', oldName);
 
-  if (error) return alert('Błąd zmiany nazwy: ' + error.message);
+  if (error) return alert('Rename error: ' + error.message);
 
-  /* 1. struktury JS */
   const idx = players.indexOf(oldName);
   players[idx]     = newName;
   totals[newName]  = totals[oldName] ?? 0;
@@ -265,14 +280,12 @@ async function renamePlayer(oldName) {
     delete activeStarts[oldName];
   }
 
-  /* 2. DOM – kafelek */
   const tile = playersContainer.querySelector(`[data-name="${oldName}"]`);
   if (tile) {
     tile.dataset.name = newName;
     tile.textContent  = newName;
   }
 
-  /* 3. DOM – wiersz tabeli */
   const row = summaryBody.querySelector(`button[data-name="${oldName}"]`)?.closest('tr');
   if (row) {
     row.children[0].textContent = newName;
@@ -287,39 +300,30 @@ async function renamePlayer(oldName) {
 
 /*  ===== 12. RENDER / REFRESH ===== */
 function refreshSummary() {
-  /* sortujemy kopię tablicy players na podstawie bieżącego czasu */
-  const sorted = [...players].sort((a, b) => nowMs(b) - nowMs(a));
-
+  const sorted = [...players].sort((a,b) => nowMs(b) - nowMs(a));
   let sum = 0;
 
   sorted.forEach(n => {
     const ms = nowMs(n);
     sum += ms;
 
-    /* aktualizacja komórki z czasem */
     const cell = document.getElementById('time-' + n);
     if (cell) cell.textContent = format(ms);
 
-    /* przestawienie wiersza w tabeli */
     const row = summaryBody.querySelector(`tr[data-name="${n}"]`);
-    if (row) summaryBody.appendChild(row);   // append przenosi na koniec
+    if (row) summaryBody.appendChild(row);
   });
 
-  /* łączny czas wszystkich graczy */
   if (totalAllEl) totalAllEl.textContent = format(sum);
 }
-
-
 function updateLiveTimes() { refreshSummary(); }
 
-/*  ===== 13. REBUILD UI (gdy nazwy w bazie się zmieniły) ===== */
+/*  ===== 13. REBUILD UI ===== */
 function rebuildUI() {
-  /* czyścimy kontenery */
   playersContainer.textContent = '';
   summaryBody.textContent      = '';
 
   players.forEach(name => {
-    /* kafelek */
     const tile = document.createElement('div');
     tile.className   = 'player';
     tile.textContent = name;
@@ -330,7 +334,6 @@ function rebuildUI() {
     });
     playersContainer.appendChild(tile);
 
-    /* wiersz */
     const row = document.createElement('tr');
     row.dataset.name = name;
     row.innerHTML = `
@@ -344,23 +347,19 @@ function rebuildUI() {
   });
 }
 
-/*  ===== 14. REALTIME (opcjonalnie) ===== */
+/*  ===== 14. REALTIME NASŁUCH ===== */
 sb.channel('player_times_updates')
   .on('postgres_changes',
       { event:'*', schema:'public', table:'player_times' },
       payload => {
-        /* payload.old & payload.new dają możliwość wykrycia zmiany nazwy */
         const newName = payload.new?.name;
         const oldName = payload.old?.name;
 
         if (newName && oldName && newName !== oldName) {
-          /* update nazwy wykonanej gdzie indziej */
           totals[newName] = totals[oldName] ?? payload.new.total_ms;
           delete totals[oldName];
-
           const idx = players.indexOf(oldName);
           if (idx !== -1) players[idx] = newName;
-
           rebuildUI();
         } else if (newName) {
           totals[newName] = payload.new.total_ms;
@@ -369,19 +368,15 @@ sb.channel('player_times_updates')
         }
       })
   .subscribe();
-  /*  ===== 15. POTWIERDZENIE ZAMKNIĘCIA STRONY ===== */
-/* Pytamy tylko wtedy, gdy użytkownik jest zalogowany (gość może wyjść bez ostrzeżenia). */
-window.addEventListener('beforeunload', event => {
-  if (!isAuthorized) return;            // brak logowania → brak pytania
 
-  /* Standard: trzeba ustawić returnValue, treść komunikatu i tak zostanie zignorowana
-     przez większość przeglądarek, ale samo ustawienie blokuje zamknięcie. */
+/*  ===== 15. POTWIERDZENIE ZAMKNIĘCIA ===== */
+window.addEventListener('beforeunload', event => {
+  if (!isAuthorized) return;
   event.preventDefault();
   event.returnValue = '';
-  /* Nie zwracamy żadnego stringa – przeglądarka pokaże swój domyślny tekst. */
 });
-
 </script>
+
 
 </body>
 </html>
