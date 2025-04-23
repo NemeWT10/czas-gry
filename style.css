@@ -1,74 +1,163 @@
+/* ------------- OGÓLNE ------------- */
+:root {
+  --bg-dark:      #0b0e17;
+  --bg-panel:     #111624;
+  --accent:       #00b4ff;
+  --accent-alpha: rgba(0,180,255,0.15);
+  --text-main:    #e0e4ff;
+  --text-muted:   #8a96c7;
+  --border:       #1f263a;
+}
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
 body {
-  font-family: Arial, Helvetica, sans-serif;
-  margin: 2rem;
+  font-family: 'Orbitron', Arial, sans-serif;
+  background: var(--bg-dark);
+  color: var(--text-main);
+  padding: 2rem 1rem 4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
 }
 
+/* ------------- NAGŁÓWKI ------------- */
 h1 {
-  font-size: 2rem;
-  margin-bottom: 1rem;
+  font-size: 2.5rem;
+  font-weight: 600;
+  margin: 0 0 .5rem;
+  text-shadow: 0 0 12px var(--accent);
 }
 
-.players {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+h2 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin: 1.8rem 0 .6rem;
+  color: var(--accent);
 }
 
-.player {
-  padding: 0.8rem;
-  text-align: center;
-  border: 1px solid #888;
-  border-radius: 8px;
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.2s;
+h3 {
+  margin: 0 0 .5rem;
+  font-weight: 400;
+  color: var(--text-muted);
 }
 
-.player.selected {
-  background: #b3d4fc;
+h3 span { color: var(--accent); }
+
+/* ------------- LOGOWANIE ------------- */
+#authSection {
+  display: flex;
+  gap: .4rem;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
-.buttons {
-  margin: 1rem 0;
-}
-
+#authSection input,
 button {
-  padding: 0.6rem 1.2rem;
-  font-size: 1rem;
-  margin-right: 0.5rem;
+  font-family: inherit;
+  font-size: .95rem;
+  padding: .55rem 1.2rem;
   border-radius: 6px;
-  border: 1px solid #555;
+  outline: none;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text-main);
+}
+
+#authSection input::placeholder { color: var(--text-muted); }
+
+/* ------------- BUTTONY ------------- */
+button {
   cursor: pointer;
+  transition: background .25s, box-shadow .25s;
+}
+
+button:hover:not(:disabled),
+.player:hover {
+  background: var(--accent-alpha);
 }
 
 button:disabled {
-  opacity: 0.6;
+  opacity: .45;
   cursor: not-allowed;
 }
 
-table {
-  border-collapse: collapse;
+/* ------------- KAFELKI GRACZY ------------- */
+.players {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: .6rem;
+  max-width: 650px;
   width: 100%;
-  max-width: 500px;
 }
 
-th,
-td {
-  padding: 0.4rem 0.6rem;
-  border: 1px solid #ccc;
+.player {
+  padding: .9rem .4rem;
   text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  user-select: none;
+  transition: background .25s, transform .1s;
+}
+
+.player.selected {
+  background: var(--accent-alpha);
+  border-color: var(--accent);
+  transform: scale(1.04);
+}
+
+/* ------------- PANEL PRZYCISKÓW ------------- */
+.buttons {
+  display: flex;
+  gap: .6rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* ------------- TABELA ------------- */
+table {
+  width: 100%;
+  max-width: 650px;
+  border-collapse: collapse;
+  margin: 0 auto;               /* wyśrodkowanie */
+  background: var(--bg-panel);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0 20px rgba(0,0,0,.35);
+}
+
+th, td {
+  padding: .55rem .7rem;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
 }
 
 th {
-  background: #f2f2f2;
+  background: rgba(255,255,255,.03);
+  color: var(--accent);
+  font-weight: 600;
 }
 
-#authSection {
-  margin-bottom: 1.5rem;
+tr:last-child td { border-bottom: none; }
+
+/* przyciski w tabeli */
+.editBtn,
+.renameBtn {
+  padding: .3rem .8rem;
+  font-size: .75rem;
 }
 
-#authSection input {
-  padding: 0.4rem 0.6rem;
-  font-size: 1rem;
+/* ------------- RESPONSYWNOŚĆ ------------- */
+@media (max-width: 520px) {
+  h1 { font-size: 2rem; }
+  th, td { font-size: .9rem; }
+  .editBtn, .renameBtn { font-size: .7rem; }
 }
