@@ -36,6 +36,10 @@
     </thead>
     <tbody id="summaryBody"></tbody>
   </table>
+<h3>
+  Łączny czas wszystkich graczy:
+  <span id="totalAll">00:00:00</span>
+</h3>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -53,6 +57,7 @@ let   isAuthorized   = false;
 let   timerInterval  = null;
 
 /*  ===== 3. ELEMENTY DOM ===== */
+const totalAllEl       = document.getElementById('totalAll');   // ⬅️ nowa
 const playersContainer = document.getElementById('players');
 const summaryBody      = document.getElementById('summaryBody');
 const startBtn         = document.getElementById('startBtn');
@@ -273,11 +278,20 @@ async function renamePlayer(oldName) {
 
 /*  ===== 12. RENDER / REFRESH ===== */
 function refreshSummary() {
+  let sum = 0;
+
   players.forEach(n => {
+    const ms = nowMs(n);
+    sum += ms;
+
     const el = document.getElementById('time-' + n);
-    if (el) el.textContent = format(nowMs(n));
+    if (el) el.textContent = format(ms);
   });
+
+  /* aktualizacja licznika łącznego czasu */
+  if (totalAllEl) totalAllEl.textContent = format(sum);
 }
+
 function updateLiveTimes() { refreshSummary(); }
 
 /*  ===== 13. REBUILD UI (gdy nazwy w bazie się zmieniły) ===== */
